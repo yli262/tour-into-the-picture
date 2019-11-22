@@ -3,6 +3,8 @@ var scene = new THREE.Scene();
 var container;
 var objects = []
 var mesh; // the plane mesh to display image
+var dots; //control points
+var controls;
 /**
 * Camera
 **/
@@ -156,8 +158,14 @@ function init(){
     // and a height that preserves the image's aspect ratio
     var planeGeometry = new THREE.PlaneGeometry(10, 10*.75);
     mesh = new THREE.Mesh(planeGeometry, material);
+    mesh.name = 'planeMeshObject';
     // console.log("plane vertices", planeGeometry.vertices)
     mesh.position.set(0,0,0);
+
+    controls = new THREE.OrbitControls( camera, renderer.domElement  );
+    //controls.addEventListener( 'change', render );
+    controls.enabled = false;
+
     scene.add(mesh);
 
     // for (var i = 0; i <)
@@ -171,6 +179,8 @@ function init(){
         console.log("Y", y)
 
     }
+
+    //console.log("focal length", camera.getFocalLength());
 
     // Add a point light with #fff color, .7 intensity, and 0 distance
     var light = new THREE.PointLight( 0xffffff, 1, 0 );
@@ -188,6 +198,10 @@ function init(){
 function animate() {
     requestAnimationFrame(animate);
     camera.lookAt(scene.position);
+    controls.update();
+    // if (controls != null) {
+    //     controls.update();
+    // }
     renderer.render(scene, camera);
 }
 
@@ -205,7 +219,8 @@ function addControlPoints() {
     controlPoints.vertices.push(new THREE.Vector3(2,  2, 0.0));
     controlPoints.vertices.push(new THREE.Vector3(2, -2, 0.0));
     var dotMaterial = new THREE.PointsMaterial( { size: 0.2, color: "blue" } );
-    var dots = new THREE.Points( controlPoints, dotMaterial );
+    dots = new THREE.Points( controlPoints, dotMaterial );
+    dots.name = 'controlPoints';
     objects.push(dots);
     scene.add(dots);
 
@@ -245,6 +260,7 @@ function addControlPoints() {
     edgePoints.vertices.push(lrIntersection);
     var edgeDotMaterial = new THREE.PointsMaterial( { size: 0.2, color: "green" } );
     var edgeDotMesh = new THREE.Points( edgePoints, edgeDotMaterial );
+    edgeDotMesh.name = 'edgePoints';
     scene.add(edgeDotMesh);
 
     // var lineGeometry = new THREE.Geometry();
@@ -258,6 +274,7 @@ function addControlPoints() {
     //scene.add(lineMesh);
     var lineMaterial = new THREE.LineBasicMaterial( { color: "red" } );
     var line = new THREE.Line( controlPoints, lineMaterial );
+    line.name = 'vanishingLine'
     var positions = line.geometry.vertices;
     // Add the other lines connecting vanishing point to vertices
     positions.push(controlPoints.vertices[1]);
@@ -505,5 +522,184 @@ function calculateLineIntersection(line1,  line2) {
     // if line1 and line2 are segments, they intersect if both of the above are true
     return result;
 };
+
+function calculateDepth() {
+    // 0-center(vanish point) 1-lowerleft 2-upperleft 3-upperright 4-lowerright
+    //     0: Vector3 {x: -5, y: 3.75, z: 0}
+    // 1: Vector3 {x: 5, y: 3.75, z: 0}
+    // 2: Vector3 {x: -5, y: -3.75, z: 0}
+    // 3: Vector3 {x: 5, y: -3.75, z: 0}
+    var h = mesh.geometry.vertices[0].y - dots.geometry.vertices[0].y;
+    var l = dots.geometry.vertices[0].y - mesh.geometry.vertices[2].y;
+    var a = dots.geometry.vertices[2].y - dots.geometry.vertices[0].y;
+    var b = dots.geometry.vertices[0].y - dots.geometry.vertices[1].y;
+    var f = camera.getFocalLength();
+    var d_top = h * f /a -f;
+    var d_bottom = l * f/b - f;
+    var wl = dots.geometry.vertices[0].x - mesh.geometry.vertices[0].x;
+    var wr = mesh.geometry.vertices[1].x - dots.geometry.vertices[0].x ;
+    var c = dots.geometry.vertices[0].x - dots.geometry.vertices[2].x;
+    var d = dots.geometry.vertices[3].x - dots.geometry.vertices[0].x;
+    var d_left = wl * f/c - f;
+    var d_right = wr * f/d - f;
+    var ah = (f + d_top)*a/f;
+    var bh = (f + d_bottom)*b/f;
+    var cw = (f + d_left)*c/f;
+    var dw = (f + d_right)*d/f;
+    var rear_height = ah + bh;
+    var rear_width = cw + dw;
+    // console.log("h", h);
+    // console.log("l", l);
+     console.log("f", f);
+    // console.log("a", a);
+    // console.log("b", b);
+    console.log("d_bottom", d_bottom);
+    //console.log("1y", dots.geometry.vertices[0].y - dots.geometry.vertices[1].y);
+    console.log("d_top", d_top);
+    // console.log("wl", wl);
+    // console.log("wr", wr);
+    // console.log("c", c);
+    // console.log("d", d);
+    console.log("d_left", d_left);
+    console.log("d_right", d_right);
+    // console.log("rear_height", rear_height);
+    // console.log("rear_width", rear_width);
+    //console.log("ah bh cw dw", ah, bh, cw, dw); 
+    //dots.geometry.vertices.push( new THREE.Vector3( -rear_width/2,  rear_height/2, d_bottom ));
+    //dots.geometry.verticesNeedUpdate = true;
+    createFaceGeometry(d_top, d_bottom, d_left, d_right);
+    controls.enabled = true;
+}
+
+function createFaceGeometry(d_top, d_bottom, d_left, d_right) {
+    var box_geometry = new THREE.Geometry();
+
+    // 0: Vector3 {x: -5, y: 3.75, z: 0}
+    // 1: Vector3 {x: 5, y: 3.75, z: 0}
+    // 2: Vector3 {x: -5, y: -3.75, z: 0}
+    // 3: Vector3 {x: 5, y: -3.75, z: 0}
+    var half_w = Math.abs(mesh.geometry.vertices[0].x);
+    var half_h = Math.abs(mesh.geometry.vertices[0].y);
+    // vertices
+    var depth = Math.max(d_top, d_bottom, d_left, d_right);
+    // box_geometry.vertices = [
+    //     new THREE.Vector3( -half_w,  -half_h, -depth ) , //       (dummy 0)
+    //     new THREE.Vector3( -half_w,  -half_h, -depth ) , //       (1)
+    //     new THREE.Vector3( half_w,  -half_h, -depth ), //       (2)
+    //     new THREE.Vector3( -half_w,  -half_h,  -depth + d_bottom ), //       (3)
+    //     new THREE.Vector3( half_w,  -half_h, -depth + d_bottom ), //       (4)
+    //     new THREE.Vector3( -half_w,  -half_h, -depth + d_left ), //       (5)
+    //     new THREE.Vector3( half_w,  -half_h,  -depth + d_right ), //       (6)
+    //     new THREE.Vector3( -half_w,  half_h, -depth ), //       (7)
+    //     new THREE.Vector3( half_w,  half_h, -depth ), //       (8)
+    //     new THREE.Vector3( -half_w,  half_h, -depth + d_top ), //       (9)
+    //     new THREE.Vector3( half_w,  half_h,  -depth + d_top ), //       (10)
+    //     new THREE.Vector3( -half_w,  half_h,  -depth + d_left ), //       (11)
+    //     new THREE.Vector3( half_w,  half_h, -depth + d_right )  //       (12)
+    // ];
+    box_geometry.vertices = [
+        new THREE.Vector3( -half_w,  -half_h, 0 ) , //       (dummy 0)
+        new THREE.Vector3( -half_w,  -half_h, 0 ) , //       (1)
+        new THREE.Vector3( half_w,  -half_h, 0 ), //       (2)
+        new THREE.Vector3( -half_w,  -half_h,  d_bottom ), //       (3)
+        new THREE.Vector3( half_w,  -half_h,  d_bottom ), //       (4)
+        new THREE.Vector3( -half_w,  -half_h, d_left ), //       (5)
+        new THREE.Vector3( half_w,  -half_h,  d_right ), //       (6)
+        new THREE.Vector3( -half_w,  half_h, 0 ), //       (7)
+        new THREE.Vector3( half_w,  half_h, 0 ), //       (8)
+        new THREE.Vector3( -half_w,  half_h, d_top ), //       (9)
+        new THREE.Vector3( half_w,  half_h,  d_top ), //       (10)
+        new THREE.Vector3( -half_w,  half_h,  d_left ), //       (11)
+        new THREE.Vector3( half_w,  half_h, d_right )  //       (12)
+    ];
+
+    // faces must be specified in counter-clockwise order
+    box_geometry.faces.push(
+        // new THREE.Face4( 1, 2, 3, 4 ),  // bottom
+        // new THREE.Face4( 1, 2, 7, 8 ),  // rear
+        // new THREE.Face4( 1, 7, 5, 11 ),  // left
+        // new THREE.Face4( 2, 8, 6, 12 ),  // right
+        // new THREE.Face4( 7, 8, 9, 10) // top
+        new THREE.Face3( 3, 2, 1 ),  new THREE.Face3( 3, 4, 2 ), // bottom
+        new THREE.Face3( 8, 7, 1 ),  new THREE.Face3( 2, 8, 1 ), // rear
+        new THREE.Face3( 1, 7, 5 ),  new THREE.Face3( 7, 11, 5 ),  // left
+        new THREE.Face3( 12, 8, 2 ),  new THREE.Face3( 6, 12, 2 ),  // right
+        new THREE.Face3( 10, 9, 7 ),  new THREE.Face3(8, 10, 7 ) // top
+    );
+  
+    // normals ( since they are not specified directly )
+    box_geometry.computeFaceNormals();
+    box_geometry.computeVertexNormals();
+
+    var box_material = new THREE.MeshBasicMaterial( { color : 0x00ff00 } );
+    // An array of Materials
+    var materialArray = [
+        new THREE.MeshBasicMaterial({
+            color: 0xff0000
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0xff0000
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0x00ff00
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0x00ff00
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0x0000ff
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0x0000ff
+        }),
+        new THREE.MeshBasicMaterial({
+            color:  0xff8000
+        }),
+        new THREE.MeshBasicMaterial({
+            color:  0xff8000
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0x0080ff
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0x0080ff
+        })
+    ];
+    box_geometry.faces.forEach(function (face, i) {
+        face.materialIndex = i;
+    });
+    // mesh
+    var box_mesh = new THREE.Mesh( box_geometry, materialArray );
+    var planeObject = scene.getObjectByName('planeMeshObject');
+    var pointObject = scene.getObjectByName('controlPoints');
+    var lineObject = scene.getObjectByName('vanishingLine');
+    var edgePointObject = scene.getObjectByName('edgePoints');
+    scene.remove( planeObject );
+    scene.remove( pointObject );
+    scene.remove( lineObject );
+    scene.remove( edgePointObject );
+    scene.add( box_mesh );
+    // var cubeGeometry = new THREE.CubeGeometry(5, 5, 5);
+    // var cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    // var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    //cube.rotation.y = Math.PI * 45 / 180;
+   //scene.add(cube);
+//     var geometry = new THREE.BoxGeometry( 1, 1, 1 );
+// var material = new THREE.MeshBasicMaterial( {color: 0x00ff00} );
+// var cube = new THREE.Mesh( geometry, material );
+// scene.add( cube );
+
+//     var skyboxGeometry = new THREE.CubeGeometry(10000, 10000, 10000);
+// var skyboxMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+// var skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
+
+// scene.add(skybox);
+
+    var pointLight = new THREE.PointLight(0xffffff);
+pointLight.position.set(1, 1, 100);
+
+scene.add(pointLight);
+
+}
 
 
