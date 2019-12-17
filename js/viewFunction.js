@@ -1,10 +1,26 @@
-// Create the scene and a camera to view it
+document.body.classList.add("loading");
 var scene = new THREE.Scene();
 var container;
 var objects = []
 var mesh; // the plane mesh to display image
 var dots; //control points
 var controls;
+var edgeDotMesh; // points on border of image
+var imageMaterial;
+var bottomPlane;
+var topPlane;
+var rearPlane;
+var leftPlane;
+var rightPlane;
+var myImage;
+var texture;
+// size of the plane that displays the image
+var imgPlaneWidth = 10;
+var imgPlaneHeight = 7.5;
+var imgHeight;
+var imgWidth;
+var cameraPositions = []
+var currCameraPos = 0;
 /**
 * Camera
 **/
@@ -29,118 +45,19 @@ var camera = new THREE.PerspectiveCamera(
 
 // Finally, set the camera's position in the z-dimension
 camera.position.z = 5;
+//cameraPositions.push([0, 0, 5]);
 
-// Create the normal
-var normalMatrix = new THREE.Matrix3();
-
-// Create ModelView matrix
-var modelViewMatrix = new THREE.Matrix4();
-
-//Create Projection matrix
-var projectionMatrix = new THREE.Matrix4();
-var p2TexMatrix = new THREE.Matrix4();
-
-
-var modelViewMatrixStack = [];
-
-// the vertices of the back panel
-var squareVertices = [
-    -0.5, -0.5, 0.0,
-    -0.5,  0.5, 0.0,
-     0.5,  0.5, 0.0,
-     0.5, -0.5, 0.0,
-     0.0,  0.0, 0.0
-];
-
-// 4 vanishing lines consist of 8 vertices 
-var vanishingLineVertices = [
-    0.0,  0.0, 0.0,
-   -0.5, -0.5, 0.0,
-    0.0,  0.0, 0.0,
-   -0.5,  0.5, 0.0,
-    0.0,  0.0, 0.0,
-    0.5,  0.5, 0.0,
-    0.0,  0.0, 0.0,
-    0.5, -0.5, 0.0,
-    0.0,  0.0, 0.0,
-   -0.5, -0.5, 0.0,
-    0.0,  0.0, 0.0,
-   -0.5,  0.5, 0.0,
-    0.0,  0.0, 0.0,
-    0.5,  0.5, 0.0,
-    0.0,  0.0, 0.0,
-    0.5, -0.5, 0.0,
-];
-
-// //-------------------------//
-// // View parameters
-// var eyePos = new THREE.Vector3(0.0, 0.0, 0.0);
-// var viewDir = new THREE.Vector3(0.0, 0.0, -1.0);
-// var up = new THREE.Vector3(0.0,1.0,0.0);
-// var viewPos = new THREE.Vector3(0.0,0.0,0.0);
-// //--------------------------//
-
-//----------------------------------------------------------------------------------
-/**
- * Translates degrees to radians
- * @param {Number} degrees Degree input to function
- * @return {Number} The radians that correspond to the degree input
- */
-function degreesToRadians(degrees) {
-    return degrees * Math.PI / 180;
+function onOpenCvReady() {
+    document.body.classList.remove("loading");
 }
-
-/**
- * Apply quaternion to eye's up vector and look at vector based on user input
- */
-function handleKeys() {
-    if (currentlyPressedKeys[87] || currentlyPressedKeys[38]) { // case W or up arrow 
-        eyePos.add(new THREE.Vector3(0, 0, -0.005));
-    }
-    if (currentlyPressedKeys[83] || currentlyPressedKeys[40]) { // case S or down arrow
-        eyePos.add(new THREE.Vector3(0, 0, 0.005));
-    }
-    if (currentlyPressedKeys[65] || currentlyPressedKeys[37]) { // case A or left arrow
-        eyePos.add(new THREE.Vector3(-0.005, 0, 0));
-    }
-    if (currentlyPressedKeys[68] || currentlyPressedKeys[39]) { // case A or right arrow
-        eyePos.add(new THREE.Vector3(0.005, 0, 0));
-    }
-    if (currentlyPressedKeys[73]) { // Case I
-        eyePos.add(new THREE.Vector3(0, -0.005, 0));
-    }
-    if (currentlyPressedKeys[75]) { // Case K
-        eyePos.add(new THREE.Vector3(0, 0.005, 0));
-    }
-}
-
-var loader = new THREE.ImageLoader();
-
-// load image source
-loader.load(
-	'../image/building.png',
-
-	function ( image ) {
-		// use the image, e.g. draw part of it on a canvas
-		var canvas = document.createElement( 'canvas' );
-		var context = canvas.getContext( '2d' );
-		context.drawImage( image, 100, 100 );
-	},
-
-	undefined,
-
-	// onError
-	function () {
-		console.error( 'An error happened.' );
-	}
-);
 
 init()
   
 function init(){
     document.getElementById('userImage').addEventListener('change', function(e) {
 
-    var userImage = e.target.files[0];     
+    var userImage = e.target.files[0];   
+    myImage = e.target.files[0];
     var userImageURL = URL.createObjectURL( userImage );
 
     container = document.getElementById('container');      
@@ -150,58 +67,61 @@ function init(){
     container.appendChild(renderer.domElement);
 
     var loader = new THREE.TextureLoader();
+    //var i_loader = new THREE.ImageLoader();
+    //i_loader.load(userImageURL);
+    texture = loader.load(userImageURL);
     var material = new THREE.MeshLambertMaterial({
         map: loader.load(userImageURL)
     });
+    imageMaterial = new THREE.MeshBasicMaterial({
+        map: loader.load(userImageURL)
+    });
+    //console.log("w", i_loader.tw);
+    var _URL = window.URL || window.webkitURL;
+    var img = new Image();
+    img.onload = function () {
+        imgHeight = img.height;
+        imgWidth = img.width;
+        //alert(width + " " + height);
+        var aspectRatio = imgHeight/imgWidth;
+        var planeGeometry = new THREE.PlaneGeometry(imgPlaneWidth, imgPlaneWidth * aspectRatio);
+        mesh = new THREE.Mesh(planeGeometry, material);
+        mesh.name = 'planeMeshObject';
+        // console.log("plane vertices", planeGeometry.vertices)
+        mesh.position.set(0,0,0);
 
-    // create a plane geometry for the image with a width of 10
-    // and a height that preserves the image's aspect ratio
-    var planeGeometry = new THREE.PlaneGeometry(10, 10*.75);
-    mesh = new THREE.Mesh(planeGeometry, material);
-    mesh.name = 'planeMeshObject';
-    // console.log("plane vertices", planeGeometry.vertices)
-    mesh.position.set(0,0,0);
+        controls = new THREE.OrbitControls( camera, renderer.domElement  );
+        //controls.addEventListener( 'change', render );
+        controls.enabled = false;
+        for (var i = 0; i <4; i ++) {
+            var worldLoc = mesh.worldToLocal(planeGeometry.vertices[i]);
+            console.log("worldToLocal", worldLoc);
+            var x = (planeGeometry.vertices[i].x/ window.innerWidth) * 2 - 1;
+            var y = -(planeGeometry.vertices[i].y / window.innerHeight) * 2 + 1;
+            console.log("X", x)
+            console.log("Y", y)
 
-    controls = new THREE.OrbitControls( camera, renderer.domElement  );
-    //controls.addEventListener( 'change', render );
-    controls.enabled = false;
+        }
+        scene.add(mesh);
+        var light = new THREE.PointLight( 0xffffff, 1, 0 );
 
-    scene.add(mesh);
+        // Specify the light's position
+        light.position.set(1, 1, 100 );
 
-    // for (var i = 0; i <)
-    console.log("vertices", planeGeometry.vertices)
-    for (var i = 0; i <4; i ++) {
-        var worldLoc = mesh.worldToLocal(planeGeometry.vertices[i]);
-        console.log("worldToLocal", worldLoc);
-        var x = (planeGeometry.vertices[i].x/ window.innerWidth) * 2 - 1;
-        var y = -(planeGeometry.vertices[i].y / window.innerHeight) * 2 + 1;
-        console.log("X", x)
-        console.log("Y", y)
-
+        // Add the light to the scene
+        scene.add(light)
+        addControlPoints();
+        animate();
     }
-
-    //console.log("focal length", camera.getFocalLength());
-
-    // Add a point light with #fff color, .7 intensity, and 0 distance
-    var light = new THREE.PointLight( 0xffffff, 1, 0 );
-
-    // Specify the light's position
-    light.position.set(1, 1, 100 );
-
-    // Add the light to the scene
-    scene.add(light)
-    addControlPoints();
-    animate();
+    img.src = _URL.createObjectURL(userImage);
     } ); 
 }
 
 function animate() {
     requestAnimationFrame(animate);
     camera.lookAt(scene.position);
+    TWEEN.update();
     controls.update();
-    // if (controls != null) {
-    //     controls.update();
-    // }
     renderer.render(scene, camera);
 }
 
@@ -259,7 +179,7 @@ function addControlPoints() {
     } 
     edgePoints.vertices.push(lrIntersection);
     var edgeDotMaterial = new THREE.PointsMaterial( { size: 0.2, color: "green" } );
-    var edgeDotMesh = new THREE.Points( edgePoints, edgeDotMaterial );
+    edgeDotMesh = new THREE.Points( edgePoints, edgeDotMaterial );
     edgeDotMesh.name = 'edgePoints';
     scene.add(edgeDotMesh);
 
@@ -312,8 +232,8 @@ function addControlPoints() {
         event.preventDefault();
         dragging = true;
         getMouse(event);
-        // console.log("mouseX", mouse.x);
-        // console.log("mouseY", mouse.y);
+        console.log("mouseX", mouse.x);
+        console.log("mouseY", mouse.y);
         // raycaster.setFromCamera( mouse, camera );
         //objects = []
         //dots = new THREE.Points( controlPoints, dotMaterial );
@@ -350,6 +270,8 @@ function addControlPoints() {
                 //console.log("intersection point", intersects[0].point);
                 dots.geometry.vertices[currentIndex].setX(intersects[0].point.x);
                 dots.geometry.vertices[currentIndex].setY(intersects[0].point.y);
+                // console.log("new point x", intersects[0].point.x);
+                // console.log("new point y", intersects[0].point.y);
                 // update positions of the neighboring vertices so the rear plane is a rectangle
                 // 0-center(vanish point) 1-lowerleft 2-upperleft 3-upperright 4-lowerright
                 if (currentIndex == 1) {
@@ -422,8 +344,6 @@ function addControlPoints() {
         currentIndex = null;
     }
 
-
-
     function setRaycaster(event) {
         getMouse(event);
         //console.log("mouse-x", )
@@ -433,7 +353,6 @@ function addControlPoints() {
 
 }
 
-//-------------------------oldsection////
 // https://discourse.threejs.org/t/solved-how-to-find-intersection-between-two-rays/6464/5
 function isPositive( start, end, intersection ){ // all parameters are THREE.Vector3()
     let v1 = new THREE.Vector3().copy( end ).sub( start );
@@ -523,9 +442,9 @@ function calculateLineIntersection(line1,  line2) {
     return result;
 };
 
-function calculateDepth() {
+function constructScene() {
     // 0-center(vanish point) 1-lowerleft 2-upperleft 3-upperright 4-lowerright
-    //     0: Vector3 {x: -5, y: 3.75, z: 0}
+    // 0: Vector3 {x: -5, y: 3.75, z: 0}
     // 1: Vector3 {x: 5, y: 3.75, z: 0}
     // 2: Vector3 {x: -5, y: -3.75, z: 0}
     // 3: Vector3 {x: 5, y: -3.75, z: 0}
@@ -534,142 +453,29 @@ function calculateDepth() {
     var a = dots.geometry.vertices[2].y - dots.geometry.vertices[0].y;
     var b = dots.geometry.vertices[0].y - dots.geometry.vertices[1].y;
     var f = camera.getFocalLength();
-    var d_top = h * f /a -f;
-    var d_bottom = l * f/b - f;
+    var dTop = h * f /a -f;
+    var dBottom = l * f/b - f;
     var wl = dots.geometry.vertices[0].x - mesh.geometry.vertices[0].x;
     var wr = mesh.geometry.vertices[1].x - dots.geometry.vertices[0].x ;
     var c = dots.geometry.vertices[0].x - dots.geometry.vertices[2].x;
     var d = dots.geometry.vertices[3].x - dots.geometry.vertices[0].x;
-    var d_left = wl * f/c - f;
-    var d_right = wr * f/d - f;
-    var ah = (f + d_top)*a/f;
-    var bh = (f + d_bottom)*b/f;
-    var cw = (f + d_left)*c/f;
-    var dw = (f + d_right)*d/f;
-    var rear_height = ah + bh;
-    var rear_width = cw + dw;
-    // console.log("h", h);
-    // console.log("l", l);
-     console.log("f", f);
-    // console.log("a", a);
-    // console.log("b", b);
-    console.log("d_bottom", d_bottom);
-    //console.log("1y", dots.geometry.vertices[0].y - dots.geometry.vertices[1].y);
-    console.log("d_top", d_top);
-    // console.log("wl", wl);
-    // console.log("wr", wr);
-    // console.log("c", c);
-    // console.log("d", d);
-    console.log("d_left", d_left);
-    console.log("d_right", d_right);
-    // console.log("rear_height", rear_height);
-    // console.log("rear_width", rear_width);
-    //console.log("ah bh cw dw", ah, bh, cw, dw); 
-    //dots.geometry.vertices.push( new THREE.Vector3( -rear_width/2,  rear_height/2, d_bottom ));
-    //dots.geometry.verticesNeedUpdate = true;
-    createFaceGeometry(d_top, d_bottom, d_left, d_right);
-    controls.enabled = true;
-}
-
-function createFaceGeometry(d_top, d_bottom, d_left, d_right) {
-    var box_geometry = new THREE.Geometry();
-
-    // 0: Vector3 {x: -5, y: 3.75, z: 0}
-    // 1: Vector3 {x: 5, y: 3.75, z: 0}
-    // 2: Vector3 {x: -5, y: -3.75, z: 0}
-    // 3: Vector3 {x: 5, y: -3.75, z: 0}
-    var half_w = Math.abs(mesh.geometry.vertices[0].x);
-    var half_h = Math.abs(mesh.geometry.vertices[0].y);
-    // vertices
-    var depth = Math.max(d_top, d_bottom, d_left, d_right);
-    // box_geometry.vertices = [
-    //     new THREE.Vector3( -half_w,  -half_h, -depth ) , //       (dummy 0)
-    //     new THREE.Vector3( -half_w,  -half_h, -depth ) , //       (1)
-    //     new THREE.Vector3( half_w,  -half_h, -depth ), //       (2)
-    //     new THREE.Vector3( -half_w,  -half_h,  -depth + d_bottom ), //       (3)
-    //     new THREE.Vector3( half_w,  -half_h, -depth + d_bottom ), //       (4)
-    //     new THREE.Vector3( -half_w,  -half_h, -depth + d_left ), //       (5)
-    //     new THREE.Vector3( half_w,  -half_h,  -depth + d_right ), //       (6)
-    //     new THREE.Vector3( -half_w,  half_h, -depth ), //       (7)
-    //     new THREE.Vector3( half_w,  half_h, -depth ), //       (8)
-    //     new THREE.Vector3( -half_w,  half_h, -depth + d_top ), //       (9)
-    //     new THREE.Vector3( half_w,  half_h,  -depth + d_top ), //       (10)
-    //     new THREE.Vector3( -half_w,  half_h,  -depth + d_left ), //       (11)
-    //     new THREE.Vector3( half_w,  half_h, -depth + d_right )  //       (12)
-    // ];
-    box_geometry.vertices = [
-        new THREE.Vector3( -half_w,  -half_h, 0 ) , //       (dummy 0)
-        new THREE.Vector3( -half_w,  -half_h, 0 ) , //       (1)
-        new THREE.Vector3( half_w,  -half_h, 0 ), //       (2)
-        new THREE.Vector3( -half_w,  -half_h,  d_bottom ), //       (3)
-        new THREE.Vector3( half_w,  -half_h,  d_bottom ), //       (4)
-        new THREE.Vector3( -half_w,  -half_h, d_left ), //       (5)
-        new THREE.Vector3( half_w,  -half_h,  d_right ), //       (6)
-        new THREE.Vector3( -half_w,  half_h, 0 ), //       (7)
-        new THREE.Vector3( half_w,  half_h, 0 ), //       (8)
-        new THREE.Vector3( -half_w,  half_h, d_top ), //       (9)
-        new THREE.Vector3( half_w,  half_h,  d_top ), //       (10)
-        new THREE.Vector3( -half_w,  half_h,  d_left ), //       (11)
-        new THREE.Vector3( half_w,  half_h, d_right )  //       (12)
-    ];
-
-    // faces must be specified in counter-clockwise order
-    box_geometry.faces.push(
-        // new THREE.Face4( 1, 2, 3, 4 ),  // bottom
-        // new THREE.Face4( 1, 2, 7, 8 ),  // rear
-        // new THREE.Face4( 1, 7, 5, 11 ),  // left
-        // new THREE.Face4( 2, 8, 6, 12 ),  // right
-        // new THREE.Face4( 7, 8, 9, 10) // top
-        new THREE.Face3( 3, 2, 1 ),  new THREE.Face3( 3, 4, 2 ), // bottom
-        new THREE.Face3( 8, 7, 1 ),  new THREE.Face3( 2, 8, 1 ), // rear
-        new THREE.Face3( 1, 7, 5 ),  new THREE.Face3( 7, 11, 5 ),  // left
-        new THREE.Face3( 12, 8, 2 ),  new THREE.Face3( 6, 12, 2 ),  // right
-        new THREE.Face3( 10, 9, 7 ),  new THREE.Face3(8, 10, 7 ) // top
-    );
-  
-    // normals ( since they are not specified directly )
-    box_geometry.computeFaceNormals();
-    box_geometry.computeVertexNormals();
-
-    var box_material = new THREE.MeshBasicMaterial( { color : 0x00ff00 } );
-    // An array of Materials
-    var materialArray = [
-        new THREE.MeshBasicMaterial({
-            color: 0xff0000
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0xff0000
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0x00ff00
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0x00ff00
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0x0000ff
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0x0000ff
-        }),
-        new THREE.MeshBasicMaterial({
-            color:  0xff8000
-        }),
-        new THREE.MeshBasicMaterial({
-            color:  0xff8000
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0x0080ff
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0x0080ff
-        })
-    ];
-    box_geometry.faces.forEach(function (face, i) {
-        face.materialIndex = i;
-    });
-    // mesh
-    var box_mesh = new THREE.Mesh( box_geometry, materialArray );
+    var dLeft = wl * f/c - f;
+    var dRight = wr * f/d - f;
+    console.log("f", f);
+    console.log("dBottom", dBottom);
+    console.log("dTop", dTop);
+    console.log("dLeft", dLeft);
+    console.log("dRight", dRight);
+    //createFaceGeometry(dTop, dBottom, dLeft, dRight);
+    var coordinates = getTransformCoordinates(dTop, dBottom, dLeft, dRight);
+    warpImageOntoCanvas(coordinates.Bottom.source, coordinates.Bottom.target, "bottom");
+    warpImageOntoCanvas(coordinates.Rear.source, coordinates.Rear.target, "rear");
+    warpImageOntoCanvas(coordinates.Left.source, coordinates.Left.target, "left");
+    warpImageOntoCanvas(coordinates.Right.source, coordinates.Right.target, "right");
+    warpImageOntoCanvas(coordinates.Top.source, coordinates.Top.target, "top");
+    createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight);
+    addCameraPositions(dTop, dBottom, dLeft, dRight);
+    // remove the control points
     var planeObject = scene.getObjectByName('planeMeshObject');
     var pointObject = scene.getObjectByName('controlPoints');
     var lineObject = scene.getObjectByName('vanishingLine');
@@ -678,28 +484,352 @@ function createFaceGeometry(d_top, d_bottom, d_left, d_right) {
     scene.remove( pointObject );
     scene.remove( lineObject );
     scene.remove( edgePointObject );
-    scene.add( box_mesh );
-    // var cubeGeometry = new THREE.CubeGeometry(5, 5, 5);
-    // var cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    // var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    //cube.rotation.y = Math.PI * 45 / 180;
-   //scene.add(cube);
-//     var geometry = new THREE.BoxGeometry( 1, 1, 1 );
-// var material = new THREE.MeshBasicMaterial( {color: 0x00ff00} );
-// var cube = new THREE.Mesh( geometry, material );
-// scene.add( cube );
+    // var pointLight = new THREE.PointLight(0xffffff);
+    // pointLight.position.set(1, 1, 100);
+    // scene.add(pointLight);
+    // enable orbit controls
+    controls.enabled = true;
+}
 
-//     var skyboxGeometry = new THREE.CubeGeometry(10000, 10000, 10000);
-// var skyboxMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
-// var skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
+function convertToPixelCoord(loc, planeWidth, planeHeight, imageWidth, imageHeight) {
+    var heightRatio = imageHeight/planeHeight;
+    var widthRatio = imageWidth/planeWidth;
+    // console.log("ratio", width_ratio, height_ratio);
+    var imageCoord = {
+        TL:{x:(loc.TL.x+(planeWidth/2)) * widthRatio, y:(-loc.TL.y+(planeHeight/2)) * heightRatio},     
+        TR:{x:(loc.TR.x+(planeWidth/2)) * widthRatio, y: (-loc.TR.y+(planeHeight/2)) * heightRatio},     
+        BR:{x:(loc.BR.x+(planeWidth/2)) * widthRatio, y:(-loc.BR.y+(planeHeight/2)) * heightRatio},    
+        BL:{x:(loc.BL.x+(planeWidth/2)) * widthRatio, y:(-loc.BL.y+(planeHeight/2)) * heightRatio}
+    }
+    return imageCoord;
+}
 
-// scene.add(skybox);
+// TODO: calculate intersection point for plane vertices outside of image plane
+function getTransformCoordinates(dTop, dBottom, dLeft, dRight) {
+    // anchors defining the warped rectangle
+    // bottom plane
+    var imgWidth = texture.image.width;
+    var imgHeight = texture.image.height;
+    var sourceLocalBottom={
+        //  edge points: ul ur ll lr
+        TL:{x:dots.geometry.vertices[1].x, y:dots.geometry.vertices[1].y},     
+        TR:{x:dots.geometry.vertices[4].x, y: dots.geometry.vertices[4].y},     
+        BR:{x:edgeDotMesh.geometry.vertices[3].x, y:edgeDotMesh.geometry.vertices[3].y},    
+        BL:{x:edgeDotMesh.geometry.vertices[2].x, y:edgeDotMesh.geometry.vertices[2].y}     
+    }
+    var sourceBottom = convertToPixelCoord(sourceLocalBottom, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
 
-    var pointLight = new THREE.PointLight(0xffffff);
-pointLight.position.set(1, 1, 100);
-
-scene.add(pointLight);
+    console.log("sourceLocalBottom", sourceLocalBottom);
+    console.log("sourceBottom", sourceBottom);
+    // cornerpoints defining the desire unwarped rectangle
+    var targetBottom={
+        TL:{x:0, y: 0},
+        TR:{x:imgWidth, y:0 },
+        BR:{x:imgWidth, y:dBottom/imgPlaneHeight * imgHeight},
+        BL:{x:0, y:dBottom/imgPlaneHeight * imgHeight}
+    }
+    console.log("targetBottom", targetBottom);
+    // rear
+    var sourceLocalRear={
+        //  edge points: ul ur ll lr
+        TL:{x:dots.geometry.vertices[2].x, y:dots.geometry.vertices[2].y},     
+        TR:{x:dots.geometry.vertices[3].x, y:dots.geometry.vertices[3].y},     
+        BR:{x:dots.geometry.vertices[4].x, y: dots.geometry.vertices[4].y},    
+        BL:{x:dots.geometry.vertices[1].x, y:dots.geometry.vertices[1].y}    
+    }
+    var sourceRear = convertToPixelCoord(sourceLocalRear, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+    console.log("sourceLocalRear", sourceLocalRear);
+    console.log("sourceRear", sourceRear);
+    var targetRear={
+        TL:{x:0, y: 0},
+        TR:{x:imgWidth, y:0 },
+        BR:{x:imgWidth, y:imgHeight},
+        BL:{x:0, y:imgHeight}
+    }
+    console.log("targetRear", targetRear);
+    // left
+    var sourceLocalLeft={
+        //  edge points: ul ur ll lr
+        TL:{x:edgeDotMesh.geometry.vertices[0].x, y:edgeDotMesh.geometry.vertices[0].y},     
+        TR:{x:dots.geometry.vertices[2].x, y:dots.geometry.vertices[2].y},     
+        BR:{x:dots.geometry.vertices[1].x, y: dots.geometry.vertices[1].y},    
+        BL:{x:edgeDotMesh.geometry.vertices[2].x, y:edgeDotMesh.geometry.vertices[2].y} 
+    }
+    var sourceLeft = convertToPixelCoord(sourceLocalLeft, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+    console.log("sourceLocalLeft", sourceLocalLeft);
+    console.log("sourceLeft", sourceLeft);
+    var targetLeft={
+        TL:{x:0, y: 0},
+        TR:{x:dLeft/imgPlaneWidth * imgWidth, y:0 },
+        BR:{x:dLeft/imgPlaneWidth * imgWidth, y:imgHeight},
+        BL:{x:0, y:imgHeight}
+    }
+    console.log("targetLeft", targetLeft);
+    // right
+    var sourceLocalRight={
+        //  edge points: ul ur ll lr
+        TL:{x:dots.geometry.vertices[3].x, y: dots.geometry.vertices[3].y},     
+        TR:{x:edgeDotMesh.geometry.vertices[1].x, y:edgeDotMesh.geometry.vertices[1].y},     
+        BR:{x:edgeDotMesh.geometry.vertices[3].x, y:edgeDotMesh.geometry.vertices[3].y},    
+        BL:{x:dots.geometry.vertices[4].x, y: dots.geometry.vertices[4].y}
+    }
+    var sourceRight = convertToPixelCoord(sourceLocalRight, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+    console.log("sourceLocalRight", sourceLocalRight);
+    console.log("sourceRight", sourceRight);
+    var targetRight={
+        TL:{x:0, y: 0},
+        TR:{x:dRight/imgPlaneWidth * imgWidth, y:0 },
+        BR:{x:dRight/imgPlaneWidth * imgWidth, y:imgHeight},
+        BL:{x:0, y:imgHeight}
+    }
+    console.log("targetRight", targetRight);
+    // top
+    var sourceLocalTop={
+        //  edge points: ul ur ll lr
+        TL:{x:edgeDotMesh.geometry.vertices[0].x, y:edgeDotMesh.geometry.vertices[0].y},     
+        TR:{x:edgeDotMesh.geometry.vertices[1].x, y:edgeDotMesh.geometry.vertices[1].y},     
+        BR:{x:dots.geometry.vertices[3].x, y: dots.geometry.vertices[3].y},    
+        BL:{x:dots.geometry.vertices[2].x, y:dots.geometry.vertices[2].y}  
+    }
+    var sourceTop = convertToPixelCoord(sourceLocalTop, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+    console.log("sourceLocalTop", sourceLocalTop);
+    console.log("sourceTop", sourceTop);
+    var targetTop={
+        TL:{x:0, y: 0},
+        TR:{x:imgWidth, y:0 },
+        BR:{x:imgWidth, y:dTop/imgPlaneHeight * imgHeight},
+        BL:{x:0, y:dTop/imgPlaneHeight * imgHeight}
+    }
+    console.log("targetTop", targetTop);
+    var coordinates={
+        Bottom: {source: sourceBottom, target: targetBottom},
+        Rear: {source: sourceRear, target: targetRear},
+        Left: {source: sourceLeft, target: targetLeft},
+        Right: {source: sourceRight, target: targetRight},
+        Top: {source: sourceTop, target: targetTop}
+    }
+    return coordinates;
 
 }
 
+function warpImageOntoCanvas(source, target, canvasId) {
+    var origin = cv.imread(texture.image);
+    var destination = new cv.Mat();
+    var dsize = new cv.Size(target.BR.x, target.BR.y);
+    var sourceCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [source.TL.x, source.TL.y, source.TR.x, source.TR.y,
+        source.BR.x, source.BR.y, source.BL.x, source.BL.y]);
+    var targetCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [target.TL.x, target.TL.y, target.TR.x, target.TR.y,
+        target.BR.x, target.BR.y, target.BL.x, target.BL.y]);
+    var transform_matrix = cv.getPerspectiveTransform(sourceCoords, targetCoords);
+    cv.warpPerspective(origin, destination, transform_matrix, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+    cv.imshow(canvasId, destination);
+}
 
+function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
+    var halfW = Math.abs(mesh.geometry.vertices[0].x);
+    var halfH = Math.abs(mesh.geometry.vertices[0].y);
+    // bottom
+    var canvasBottom=document.getElementById("bottom");
+    var bottomTexture = new THREE.CanvasTexture(canvasBottom);
+    var halfW = Math.abs(mesh.geometry.vertices[0].x);
+    var halfH = Math.abs(mesh.geometry.vertices[0].y);
+    var bottomPlaneGeometry = new THREE.PlaneGeometry(halfW * 2, dBottom);
+    var bottomMaterial = new THREE.MeshBasicMaterial({
+        map: bottomTexture
+    });
+    bottomPlane= new THREE.Mesh(bottomPlaneGeometry, bottomMaterial);
+    bottomPlane.translateY(-halfH);
+    bottomPlane.translateZ(dBottom/2);
+    bottomPlane.rotation.x = -Math.PI / 2;
+    scene.add(bottomPlane);
+    // rear
+    var canvasRear=document.getElementById("rear");
+    var rearTexture = new THREE.CanvasTexture(canvasRear);
+    var rearPlaneGeometry = new THREE.PlaneGeometry(halfW * 2, halfH * 2);
+    var rearMaterial = new THREE.MeshBasicMaterial({
+        map: rearTexture
+    });
+    rearPlane= new THREE.Mesh(rearPlaneGeometry, rearMaterial);
+    scene.add(rearPlane);
+    // left
+    var canvasLeft=document.getElementById("left");
+    var leftTexture = new THREE.CanvasTexture(canvasLeft);
+    var leftPlaneGeometry = new THREE.PlaneGeometry(dLeft, halfH * 2);
+    var leftMaterial = new THREE.MeshBasicMaterial({
+        map: leftTexture
+    });
+    leftPlane= new THREE.Mesh(leftPlaneGeometry, leftMaterial);
+    leftPlane.translateX(-halfW);
+    leftPlane.translateZ(dLeft/2);
+    leftPlane.rotation.y = Math.PI / 2;
+    scene.add(leftPlane);
+    // right
+    var canvasRight=document.getElementById("right");
+    var rightTexture = new THREE.CanvasTexture(canvasRight);
+    var rightPlaneGeometry = new THREE.PlaneGeometry(dRight, halfH * 2);
+    var rightMaterial = new THREE.MeshBasicMaterial({
+        map: rightTexture
+    });
+    rightPlane= new THREE.Mesh(rightPlaneGeometry, rightMaterial);
+    rightPlane.translateX(halfW);
+    rightPlane.translateZ(dRight/2);
+    rightPlane.rotation.y = -Math.PI / 2;
+    scene.add(rightPlane);
+    // top
+    var canvasTop=document.getElementById("top");
+    var topTexture = new THREE.CanvasTexture(canvasTop);
+    var topPlaneGeometry = new THREE.PlaneGeometry(halfW * 2, dTop);
+    var topMaterial = new THREE.MeshBasicMaterial({
+        map: topTexture
+    });
+    topPlane= new THREE.Mesh(topPlaneGeometry, topMaterial);
+    topPlane.translateY(halfH);
+    topPlane.translateZ(dTop/2);
+    topPlane.rotation.x = Math.PI / 2;
+    scene.add(topPlane);
+}
+
+//-----------------------------------------------------------------------------
+function start(source, target, dBottom){
+    var canvas=document.getElementById("canvas");
+    var ctx=canvas.getContext("2d");
+    var canvas1=document.getElementById("bottom");
+    var ctx1=canvas1.getContext("2d");
+
+    //console.log("w", texture.image.width);
+
+    // set canvas sizes equal to image size
+    // cw=canvas.width=canvas1.width=texture.image.width;
+    // ch=canvas.height=canvas1.height=texture.image.height;
+    canvas.height = texture.image.height;
+    canvas.width = texture.image.width;
+    canvas1.height = dBottom/imgPlaneHeight*texture.image.height;
+    canvas1.width = texture.image.width;
+    
+    var halfW = Math.abs(mesh.geometry.vertices[0].x);
+    var halfH = Math.abs(mesh.geometry.vertices[0].y);
+    // cw=canvas.width=canvas1.width=halfW*2;
+    // ch=canvas.height=canvas1.height=dBottom;
+
+    // draw the example image on the source canvas
+    ctx.drawImage(texture.image,0,0);
+
+    // unwarp the source rectangle and draw it to the destination canvas
+    unwarp(source, target, ctx1);
+}
+
+// the triangle version of perspective transform 
+// the upper triangle is slightly distorted
+// unwarp the source rectangle
+function unwarp(anchors,unwarped,context){
+
+    // clear the destination canvas
+    context.clearRect(0,0,context.canvas.width,context.canvas.height);
+  
+    // unwarp the bottom-left triangle of the warped polygon
+    mapTriangle(context,
+                anchors.TL,  anchors.BR,  anchors.BL,
+                unwarped.TL, unwarped.BR, unwarped.BL
+               );
+  
+    // eliminate slight space between triangles
+    context.translate(-1,1);
+  
+    // unwarp the top-right triangle of the warped polygon
+    mapTriangle(context,
+                anchors.TL,  anchors.BR,  anchors.TR,
+                unwarped.TL, unwarped.BR, unwarped.TR
+               );
+  
+}
+
+// Perspective mapping: Map warped triangle into unwarped triangle
+// TODO: Fix the upper triangle 
+function mapTriangle(ctx, p0, p1, p2, p_0, p_1, p_2) {
+
+
+    // break out the individual triangles x's & y's
+    var x0=p_0.x, y0=p_0.y;
+    var x1=p_1.x, y1=p_1.y;
+    var x2=p_2.x, y2=p_2.y;
+    var u0=p0.x,  v0=p0.y;
+    var u1=p1.x,  v1=p1.y;
+    var u2=p2.x,  v2=p2.y;
+  
+    // save the unclipped & untransformed destination canvas
+    ctx.save();
+  
+    // clip the destination canvas to the unwarped destination triangle
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.closePath();
+    ctx.clip();
+  
+    // Compute matrix transform
+    var delta   = u0 * v1 + v0 * u2 + u1 * v2 - v1 * u2 - v0 * u1 - u0 * v2;
+    var delta_a = x0 * v1 + v0 * x2 + x1 * v2 - v1 * x2 - v0 * x1 - x0 * v2;
+    var delta_b = u0 * x1 + x0 * u2 + u1 * x2 - x1 * u2 - x0 * u1 - u0 * x2;
+    var delta_c = u0 * v1 * x2 + v0 * x1 * u2 + x0 * u1 * v2 - x0 * v1 * u2 - v0 * u1 * x2 - u0 * x1 * v2;
+    var delta_d = y0 * v1 + v0 * y2 + y1 * v2 - v1 * y2 - v0 * y1 - y0 * v2;
+    var delta_e = u0 * y1 + y0 * u2 + u1 * y2 - y1 * u2 - y0 * u1 - u0 * y2;
+    var delta_f = u0 * v1 * y2 + v0 * y1 * u2 + y0 * u1 * v2 - y0 * v1 * u2 - v0 * u1 * y2 - u0 * y1 * v2;
+  
+    // Draw the transformed image
+    ctx.transform(
+      delta_a / delta, delta_d / delta,
+      delta_b / delta, delta_e / delta,
+      delta_c / delta, delta_f / delta
+    );
+  
+    // draw the transformed source image to the destination canvas
+    ctx.drawImage(texture.image,0,0);
+  
+    // restore the context to it's unclipped untransformed state
+    ctx.restore();
+}
+
+function animateCamera() {
+    //controls.enabled = false;
+    interval();
+    setInterval(interval, 6000);
+}
+
+function addCameraPositions(dTop, dBottom, dLeft, dRight) {
+    var halfW = Math.abs(mesh.geometry.vertices[0].x);
+    var halfH = Math.abs(mesh.geometry.vertices[0].y);
+    var depth = Math.min(dTop, dBottom, dLeft, dRight);
+    cameraPositions.push([0, 0, camera.position.z-1]);
+    cameraPositions.push([-halfW, 0, camera.position.z - 1]);
+    cameraPositions.push([halfW, 0, camera.position.z - 1]);
+    cameraPositions.push([0, halfH, camera.position.z - 1]);
+    cameraPositions.push([0, -halfH, camera.position.z - 1]);
+    cameraPositions.push([0, 0, depth])
+    cameraPositions.push([-halfW, 0, depth]);
+    cameraPositions.push([halfW, 0, depth]);
+    cameraPositions.push([0, halfH, depth]);
+    cameraPositions.push([0, -halfH, depth]);
+}
+
+function interval() {
+    currCameraPos = (currCameraPos) % cameraPositions.length;
+    //console.log("new cam pos", cameraPositions[currCameraPos]);
+    moveCamera(camera, cameraPositions[currCameraPos], 5000);
+    //moveCamera(camera, [0, 5, 5], 5000);
+    currCameraPos = currCameraPos + 1;
+}
+
+function moveCamera(camera, position, duration) {
+    var from = camera.position.clone();
+    new TWEEN.Tween(from).to({
+        x: position[0],
+        y: position[1],
+        z: position[2]
+      }, duration)
+      .easing(TWEEN.Easing.Quadratic.InOut)
+      .onUpdate( function(){
+        camera.position.copy(from);
+      })
+      .start();
+}

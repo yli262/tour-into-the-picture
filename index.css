@@ -14,7 +14,7 @@
 
 .dimButton {
     border-radius: 4px;
-    background-color: #E91E63; /* Green */
+    background-color: #E91E63; 
     border: none;
     color: white;
     padding: 15px 32px;
@@ -24,4 +24,72 @@
     font-size: 16px;
     margin: 4px 2px;
     cursor: pointer;
+}
+
+.aniButton {
+    border-radius: 4px;
+    background-color: #E65100;
+    border: none;
+    color: white;
+    padding: 15px 32px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+
+}
+
+/* display loading gif and hide webpage */
+.modal {
+    display:    none;
+    position:   fixed;
+    z-index:    1000;
+    top:        0;
+    left:       0;
+    height:     100%;
+    width:      100%;
+    background: rgba( 255, 255, 255, .8) 
+                url('http://i.stack.imgur.com/FhHRx.gif') 
+                50% 50% 
+                no-repeat;
+}
+
+/* prevent scrollbar from display during load */
+body.loading {
+    overflow: hidden;   
+}
+
+/* display the modal when loading class is added to body */
+body.loading .modal {
+    display: block;
+}
+
+.canvas {
+    display: none;
+}
+
+body {
+    background: url('https://visme.co/blog/wp-content/uploads/2017/07/50-Beautiful-and-Minimalist-Presentation-Backgrounds-040.jpg');
+    background-repeat: no-repeat;
+    background-attachment: fixed;  
+    background-size: cover;
+    text-align: center;
+}
+
+h1 {
+    font-family: "Lucida Console", Monaco, monospace;
+    color: #4E342E;
+}
+
+p {
+    color: #37474F;
+}
+
+.header {
+    padding: 20px;
+    text-align: center;
+    font-family: "Lucida Console", Monaco, monospace;
+    color: #4E342E;
 }
