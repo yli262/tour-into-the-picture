@@ -84,7 +84,8 @@ function init(){
         imgWidth = img.width;
         //alert(width + " " + height);
         var aspectRatio = imgHeight/imgWidth;
-        var planeGeometry = new THREE.PlaneGeometry(imgPlaneWidth, imgPlaneWidth * aspectRatio);
+        imgPlaneHeight = imgPlaneWidth*aspectRatio;
+        var planeGeometry = new THREE.PlaneGeometry(imgPlaneWidth, imgPlaneHeight);
         mesh = new THREE.Mesh(planeGeometry, material);
         mesh.name = 'planeMeshObject';
         // console.log("plane vertices", planeGeometry.vertices)
