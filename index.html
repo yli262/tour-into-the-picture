@@ -6,7 +6,6 @@
 <title>Tour into the Picture</title>
 <script type="text/javascript" src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
 <script src="https://threejs.org/build/three.min.js"></script>
-<script type="text/javascript" src="js/three.js"></script>
 <script type="text/javascript" src="js/OrbitControls.js"></script>
 <script src="https://unpkg.com/mathjs/dist/math.min.js"></script>
 <script type='text/javascript' src='js/tween.js'></script>
@@ -29,14 +28,35 @@
     <input type="file" id="userImage" style="display: none;" />
     <div class="modal"></div>
     <input class="imgButton" type="button" value="Select Image" onclick="document.getElementById('userImage').click();" />
+    <input class="objButton" type="button" value="Inpaint Image" onclick="exemplarInpaint()" />
     <input class="dimButton" type="button" value="Construct Scene" onclick="constructScene()" />
     <input class="aniButton" type="button" value="Tour Scene" onclick="animateCamera()" />
+    <br>
+    <br>
+    <div data-role="fieldcontain" style="font-family: Arial, Helvetica, sans-serif; font-size:14px;">
+        <fieldset data-role="controlgroup">
+            <legend>Choose a diff method for inpaint:</legend>
+                 <input type="radio" name="diffMethod" id="radio-choice-1" value="sqDiff" />
+                 <label for="radio-choice-1">Square Diff</label>
+    
+                 <input type="radio" name="diffMethod" id="radio-choice-2" value="sqDiffEuclidean" checked="checked"/>
+                 <label for="radio-choice-2">Square Diff with Euclidean Distance</label>
+    
+                 <input type="radio" name="diffMethod" id="radio-choice-3" value="sqDiffGradient" />
+                 <label for="radio-choice-3">Square Diff with Gradient</label>
+    
+                 <input type="radio" name="diffMethod" id="radio-choice-4" value="sqDiffGradientEuclidean" />
+                 <label for="radio-choice-4">Square Diff with Gradient and Euclidean Distance</label>
+        </fieldset>
+        <p id="progress"></p>
+    </div>
     <!-- <canvas id="canvas" width=300 height=300></canvas> -->
     <canvas class="canvas" id="bottom" width=300 height=300 ></canvas>
     <canvas class="canvas" id="top" width=300 height=300 ></canvas>
     <canvas class="canvas" id="left" width=300 height=300 ></canvas>
     <canvas class="canvas" id="right" width=300 height=300 ></canvas>
     <canvas class="canvas" id="rear" width=300 height=300 ></canvas>
+    <canvas class="inpaintCanvas" id="inpaint" width=300 height=300 ></canvas>
     <div class="container" id="container"></div>
     <!-- <script type="x-shader/x-vertex" id="vertexShader">
         varying vec2 vUv;

@@ -1,10 +1,22 @@
 document.body.classList.add("loading");
 var scene = new THREE.Scene();
+var planes = [];
 var container;
 var objects = []
+var allPoints = [];
 var mesh; // the plane mesh to display image
 var dots; //control points
 var controls;
+var maskPoints; // points indicating region to be inpainted
+var mask;
+var maskLinePoints;
+var maskLine;
+var front; // the edge of inpaint region
+var grayMat;
+var confidence;
+var isophote;
+var DTerm;
+var priority;
 var edgeDotMesh; // points on border of image
 var imageMaterial;
 var bottomPlane;
@@ -14,6 +26,10 @@ var leftPlane;
 var rightPlane;
 var myImage;
 var texture;
+var fillRange; 
+// var fillRangeOriginal;
+var masku8;
+var imgu8Original;
 // size of the plane that displays the image
 var imgPlaneWidth = 10;
 var imgPlaneHeight = 7.5;
@@ -104,6 +120,7 @@ function init(){
 
         }
         scene.add(mesh);
+        planes.push(mesh);
         var light = new THREE.PointLight( 0xffffff, 1, 0 );
 
         // Specify the light's position
@@ -143,6 +160,9 @@ function addControlPoints() {
     dots = new THREE.Points( controlPoints, dotMaterial );
     dots.name = 'controlPoints';
     objects.push(dots);
+    for (var i = 0; i < controlPoints.vertices.length; i++) {
+        allPoints.push(controlPoints.vertices[i]);
+    }
     scene.add(dots);
 
     // var mouse = new THREE.Vector2();
@@ -227,6 +247,8 @@ function addControlPoints() {
     //var intersects = null;
     var dragging = false;
     var currentIndex = null;
+    var currentName = null;
+    var settingForegroundMask = false;
 
     window.addEventListener("mousedown", mouseDown, false);
     function mouseDown(event) {
@@ -246,27 +268,104 @@ function addControlPoints() {
         var intersects = raycaster.intersectObjects(objects);
         if (intersects.length > 0) {
             currentIndex = intersects[0].index;
+            currentName = intersects[0].object.name;
             console.log("intersects", currentIndex);
-        }
+        } else {
+            // add new foreground object points
+            var intersects = raycaster.intersectObjects(planes);
+            if (maskPoints == null) {
+                if (intersects.length > 0) {
+                    maskPoints = new THREE.Geometry();
+                    settingForegroundMask = true;
+                    maskPoints.vertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // upper left
+                    maskPoints.vertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // upper right
+                    maskPoints.vertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // lower left
+                    maskPoints.vertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // lower right
+                    var maskMaterial = new THREE.PointsMaterial( { size: 0.2, color: "yellow" } );
+                    mask = new THREE.Points( maskPoints, maskMaterial );
+                    mask.name = "foregroundMask";
+                    objects.push(mask);
+                    allPoints.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0));
+                    scene.add(mask);
+                    maskLinePoints = new THREE.Geometry();
+                    maskLinePoints.vertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                                new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0));
+                    var maskLineMaterial = new THREE.LineBasicMaterial( { color: "white" } );
+                    maskLine = new THREE.LineSegments(maskLinePoints, maskLineMaterial );
+                    maskLine.name = "maskLine";
+                    scene.add(maskLine);
+                }
+            } else {
+                if (intersects.length > 0) {
+                    var mVertices = maskPoints.vertices;
+                    mVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // upper left
+                    mVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // upper right
+                    mVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // lower left
+                    mVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // lower right
+                    maskPoints = new THREE.Geometry();
+                    maskPoints.vertices = mVertices;
+                    scene.remove(mask);
+                    settingForegroundMask = true;
+                    var maskMaterial = new THREE.PointsMaterial( { size: 0.2, color: "yellow" } );
+                    mask = new THREE.Points( maskPoints, maskMaterial );
+                    mask.name = "foregroundMask";
+                    objects.push(mask);
+                    allPoints.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0));
+                    scene.add(mask);
 
-        // console.log(intersects)
+                    lineVertices = maskLinePoints.vertices;
+                    lineVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0),
+                                        new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0));
+                    maskLinePoints = new THREE.Geometry();
+                    maskLinePoints.vertices = lineVertices;
+                    scene.remove(maskLine);
+                    var maskLineMaterial = new THREE.LineBasicMaterial( { color: "white" } );
+                    maskLine = new THREE.LineSegments(maskLinePoints, maskLineMaterial );
+                    maskLine.name = "maskLine";
+                    scene.add(maskLine);
+                }
+            }
+        }
     }
 
     window.addEventListener("mousemove", mouseMove, false);
     function mouseMove(event) {
-        //console.log("current index", currentIndex)
-        if (dragging && currentIndex !== null) { //dragging &&
-            //console.log("moving");
-            setRaycaster(event);
-            // console.log("mouseX", mouse.x);
-            // console.log("mouseY", mouse.y);
-            // console.log("ray", raycaster.ray);
-            // raycaster.ray.intersectPlane(plane, planePoint);
-            // console.log("intersection pt", planePoint);
-            var planes = []
-            planes.push(mesh)
+        setRaycaster(event);
+        var intersects = raycaster.intersectObjects(planes);
+        if (settingForegroundMask) { // adding a new foreground object mask
+            if (intersects.length > 0) {
+                var n = mask.geometry.vertices.length;
+
+                mask.geometry.vertices[n-3].setX(intersects[0].point.x);
+                mask.geometry.vertices[n-2].setY(intersects[0].point.y);
+                mask.geometry.vertices[n-1].setX(intersects[0].point.x);
+                mask.geometry.vertices[n-1].setY(intersects[0].point.y); 
+                mask.geometry.verticesNeedUpdate = true;
+
+                maskLine.geometry.vertices[2 * n - 7].setX(intersects[0].point.x);
+                maskLine.geometry.vertices[2 * n - 6].setX(intersects[0].point.x);
+                maskLine.geometry.vertices[2 * n - 5].setX(intersects[0].point.x);
+                maskLine.geometry.vertices[2 * n - 5].setY(intersects[0].point.y);
+                maskLine.geometry.vertices[2 * n - 4].setX(intersects[0].point.x);
+                maskLine.geometry.vertices[2 * n - 4].setY(intersects[0].point.y);
+                maskLine.geometry.vertices[2 * n - 3].setY(intersects[0].point.y);
+                maskLine.geometry.vertices[2 * n - 2].setY(intersects[0].point.y);
+                maskLine.geometry.verticesNeedUpdate = true;
+            }
+        } else if (dragging && currentIndex !== null && currentName == "controlPoints") { // adjusting control points
             //var intersectionPoint;
-            var intersects = raycaster.intersectObjects(planes);
             if (intersects.length > 0) {
                 //console.log("intersection point", intersects[0].point);
                 dots.geometry.vertices[currentIndex].setX(intersects[0].point.x);
@@ -335,6 +434,8 @@ function addControlPoints() {
             //controlPoints.attributes.position.needsUpdate = true;
             //controlPoints.verticesNeedUpdate = true;
             //dots = new THREE.Points( controlPoints, dotMaterial );
+        } else if (dragging && currentIndex !== null && currentName == "foregroundMask") { // adjusting foreground mask
+
         }
     }
 
@@ -343,6 +444,7 @@ function addControlPoints() {
         //console.log("Mouse up")
         dragging = false;
         currentIndex = null;
+        settingForegroundMask = false;
     }
 
     function setRaycaster(event) {
@@ -615,6 +717,7 @@ function getTransformCoordinates(dTop, dBottom, dLeft, dRight) {
 
 function warpImageOntoCanvas(source, target, canvasId) {
     var origin = cv.imread(texture.image);
+    console.log("origin", origin);
     var destination = new cv.Mat();
     var dsize = new cv.Size(target.BR.x, target.BR.y);
     var sourceCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [source.TL.x, source.TL.y, source.TR.x, source.TR.y,
@@ -624,6 +727,7 @@ function warpImageOntoCanvas(source, target, canvasId) {
     var transform_matrix = cv.getPerspectiveTransform(sourceCoords, targetCoords);
     cv.warpPerspective(origin, destination, transform_matrix, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
     cv.imshow(canvasId, destination);
+    origin.delete();
 }
 
 function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
@@ -833,4 +937,829 @@ function moveCamera(camera, position, duration) {
         camera.position.copy(from);
       })
       .start();
+}
+
+function inpaintImage() {
+    if (maskPoints == null) { // no foreground mask 
+        return;
+    }
+    // console.log("Set Mask");
+    // console.log("img", imgWidth);
+    var canvas=document.getElementById("inpaint");
+    canvas.width = imgWidth;
+    canvas.height = imgHeight;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(texture.image, 0, 0);
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // var width = imgData.width, height = imgData.height;
+    // console.log("w and h", width, height);
+    var masku8 = new Uint8Array(imgWidth * imgHeight);
+    console.log("imgData", imgData);
+    console.log("data length", imgData.data.length);
+    // for (var i = 0; i < imgData.data.length / 4; i ++) {
+
+    // }
+    //var count = 0; 
+    console.log("mask vertices", maskPoints.vertices);
+    for (var i = 0; i < maskPoints.vertices.length; i += 4) {
+        var inpaintLoc={
+            TL:{x:maskPoints.vertices[i].x, y:maskPoints.vertices[i].y},     
+            TR:{x:maskPoints.vertices[i + 1].x, y:maskPoints.vertices[i + 1].y},     
+            BR:{x:maskPoints.vertices[i + 3].x, y:maskPoints.vertices[i + 3].y},    
+            BL:{x:maskPoints.vertices[i + 2].x, y:maskPoints.vertices[i + 2].y}     
+        }
+        console.log("inpaint Loc", inpaintLoc);
+        var inpaintRegion = convertToPixelCoord(inpaintLoc, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+        console.log("inpaint region in pixel", inpaintRegion);
+        var minX = Math.round(inpaintRegion.TL.x);
+        var minY = Math.round(inpaintRegion.TR.y);
+        var maxX = Math.round(inpaintRegion.BR.x);
+        var maxY = Math.round(inpaintRegion.BR.y);
+        console.log("x - y", minX, maxX, minY, maxY);
+        for (var x = minX; x <= maxX; x ++) {
+            for (var y = minY; y <= maxY; y ++) {
+                masku8[((imgWidth * y) + x)] = 1; 
+                //count += 1;
+            }
+        }
+        //console.log("count", count);
+    }
+    // for (var i = 0; i < imgHeight*imgWidth; i++) {
+
+    // }
+    for (var channel = 0; channel < 3; channel++ ) {
+        var imgu8 = new Uint8Array(imgWidth * imgHeight);
+        for (var n = 0; n < imgData.data.length; n+=4 ) {
+            imgu8[n/4] = imgData.data[n + channel];
+        }
+        imgu8Original = imgu8.slice();
+        var image = InpaintTelea(imgWidth, imgHeight, imgu8, masku8);
+        console.log("image", imgu8);
+        for (var i = 0; i < imgu8.length; i ++) {
+            imgData.data[4*i + channel] = imgu8[i];
+        }
+    }
+    for (var i = 0; i < imgu8.length; i ++) {
+        imgData.data[4*i + 3] = 255; //alpha
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    // var c = document.createElement('canvas')
+	// c.width = merp.width;
+	// c.height = merp.height;
+	// document.body.appendChild(c)
+	// var ctx = c.getContext('2d');
+	// ctx.drawImage(merp, 0, 0)
+	// var blah = ctx.getImageData(0, 0, c.width, c.height);
+
+	// var width = blah.width, height = blah.height;
+	// var mask_u8 = new Uint8Array(width * height);
+	// for(var i = 0; i < blah.data.length / 4; i++){
+	// 	var Y = .299 * blah.data[4 * i] + .587 * blah.data[4 * i + 1] +  .114 * blah.data[4 * i + 2];
+
+	// 	if(Y > 230){
+	// 		var rad = 6
+
+	// 		for(var dx = -rad; dx <= rad; dx++){
+	// 			for(var dy = -rad; dy <= rad; dy++){
+	// 				if(dx * dx + dy * dy <= rad * rad){
+	// 					mask_u8[i + dx + dy * width] = 1;
+	// 				}
+	// 			}
+	// 		}
+	// 		// blah.data[i * 4] = 0
+	// 		// blah.data[i * 4 + 1] = 0
+	// 		// blah.data[i * 4 + 2] = 0
+	// 	}
+	// }
+	// for(var channel = 0; channel < 3; channel++){
+	// 	var img_u8 = new Uint8Array(width * height)
+	// 	for(var n = 0; n < blah.data.length; n+=4){
+	// 		img_u8[n / 4] = blah.data[n + channel]
+	// 	}
+	// 	InpaintTelea(width, height, img_u8, mask_u8)
+	// 	for(var i = 0; i < img_u8.length; i++){
+	// 		blah.data[4 * i + channel] = img_u8[i]
+	// 	}	
+	// }
+	// // render result back to canvas
+	// for(var i = 0; i < img_u8.length; i++){
+	// 	blah.data[4 * i + 3] = 255;
+	// }
+    
+    // ctx.putImageData(blah, 0, 0);
+}
+
+function exemplarInpaint() {
+    if (maskPoints == null) { // no foreground mask 
+        return;
+    }
+    var canvas=document.getElementById("inpaint");
+    canvas.width = imgWidth;
+    canvas.height = imgHeight;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(texture.image, 0, 0);
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    masku8 = new Uint8Array(imgWidth * imgHeight);
+    // move to inside the loop
+    var confidenceOriginal = new Float32Array(imgWidth * imgHeight); // condifence for each pixel of the image
+    // priority = new Float32Array(imgWidth * imgHeight); // move to inside the loop
+    confidenceOriginal.fill(1); // each known pixel has a confidence of 1
+    for (var i = 0; i < maskPoints.vertices.length; i += 4) {
+        var inpaintLoc={
+            TL:{x:maskPoints.vertices[i].x, y:maskPoints.vertices[i].y},     
+            TR:{x:maskPoints.vertices[i + 1].x, y:maskPoints.vertices[i + 1].y},     
+            BR:{x:maskPoints.vertices[i + 3].x, y:maskPoints.vertices[i + 3].y},    
+            BL:{x:maskPoints.vertices[i + 2].x, y:maskPoints.vertices[i + 2].y}     
+        }
+        console.log("inpaint Loc", inpaintLoc);
+        var inpaintRegion = convertToPixelCoord(inpaintLoc, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+        console.log("inpaint region in pixel", inpaintRegion);
+        var minX = Math.round(inpaintRegion.TL.x);
+        var minY = Math.round(inpaintRegion.TR.y);
+        var maxX = Math.round(inpaintRegion.BR.x);
+        var maxY = Math.round(inpaintRegion.BR.y);
+        console.log("x - y", minX, maxX, minY, maxY);
+        for (var x = minX; x <= maxX; x ++) {
+            for (var y = minY; y <= maxY; y ++) {
+                masku8[(imgWidth * y) + x] = 255; 
+                confidenceOriginal[((imgWidth * y) + x)] = 0;
+            }
+        }
+    }
+    //fillRange = masku8.slice(); //move to inside the loop
+
+    // while ( sumArray(fillRange) > 0 ) {
+    //     front = getEdge(fillRange);
+        
+
+    // }
+    var src = cv.imread(texture.image);
+    grayMat = new cv.Mat();
+    cv.cvtColor(src, grayMat, cv.COLOR_RGBA2GRAY, 0);
+    src.delete();
+
+    //getEdge(fillRange);
+    //console.log("front", front.data);
+    //ctx.putImageData(front.data, 0, 0);
+
+    // for (var channel = 0; channel < 3; channel++ ) {
+        var imgu8 = new Uint8Array(imgWidth * imgHeight);
+        var imgu8R = new Uint8Array(imgWidth * imgHeight);
+        var imgu8G = new Uint8Array(imgWidth * imgHeight);
+        var imgu8B = new Uint8Array(imgWidth * imgHeight);
+        fillRange = masku8.slice();
+        //fillRangeOriginal = 
+        confidence = confidenceOriginal.slice();
+        priority = new Float32Array(imgWidth * imgHeight);
+        for (var n = 0; n < imgData.data.length; n+=4 ) {
+            //imgu8[n/4] = imgData.data[n + channel];
+            imgu8[n/4] = imgData.data[n + 0];
+            imgu8R[n/4] = imgData.data[n + 0];
+            imgu8G[n/4] = imgData.data[n + 1];
+            imgu8B[n/4] = imgData.data[n + 2];
+
+        }
+        //console.log("before", sumArray(imgu8));
+
+        //var image = InpaintTelea(imgWidth, imgHeight, imgu8, masku8);
+        //inpaint(imgu8);
+        // launch();
+        // inpaint(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx);
+        for (var i = 0; i < imgu8.length; i ++) {
+            if (fillRange[i] != 0) { // blank out
+                imgData.data[4*i ] = 255;
+                imgData.data[4*i + 1 ] = 255;
+                imgData.data[4*i + 2 ] = 255;
+            }
+        }
+    // }
+    for (var i = 0; i < imgu8.length; i ++) {
+        imgData.data[4*i + 3] = 255; //alpha
+    }
+        inpaintAndShowProgress(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx);
+        //window.setTimeout(inpaint, 1000, imgu8, imgu8R,  imgu8G, imgu8B, imgData, ctx);
+        //console.log("after", sumArray(imgu8));
+    //     for (var i = 0; i < imgu8.length; i ++) {
+    //         // imgData.data[4*i + channel] = imgu8[i];
+    //         imgData.data[4*i ] = imgu8R[i];
+    //         imgData.data[4*i + 1 ] = imgu8G[i];
+    //         imgData.data[4*i + 2 ] = imgu8B[i];
+    //     }
+    // // }
+    // for (var i = 0; i < imgu8.length; i ++) {
+    //     imgData.data[4*i + 3] = 255; //alpha
+    // }
+    ctx.putImageData(imgData, 0, 0);
+}
+
+// function launch() {
+//     var inc = 0,
+//         max = 9999;
+//         delay = 100; // 100 milliseconds
+ 
+//     function timeoutLoop() {
+//         document.getElementById("progress").innerHTML = "Inpaint progress: " + inc.toString() + "%";
+//        if (++inc < max)
+//           setTimeout(timeoutLoop, delay);
+//     }
+ 
+//     setTimeout(timeoutLoop, delay);
+//  }
+function inpaintAndShowProgress(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) {
+    var delay = 200; // 200 miliseconds
+
+    setTimeout(inpaint, delay, imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx)
+}
+
+function inpaint(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) { //imgu8) { //
+    var delay = 200; // 200 miliseconds
+    var diffMethod;
+    var radios = document.getElementsByName('diffMethod');
+    for (var i = 0, length = radios.length; i < length; i++) {
+        if (radios[i].checked) {
+            diffMethod = radios[i].value;
+            break;
+        }
+    }
+    var totalFillRange = sumArray(fillRange);
+    var percentage = (1.0 - sumArray(fillRange)/totalFillRange) * 100.0;
+    // document.getElementById("progress").innerHTML = "Inpaint progress: " + percentage.toString() + "%";
+    if (sumArray(fillRange) != 0) {
+        //console.log("fillrange is", sumArray(fillRange));
+        getEdge(fillRange);
+        updatePriority(fillRange);
+        //console.log("priority", sumArray(priority));
+        var targetPoint = getTargetPoint();
+        //console.log("target point", targetPoint);
+        var bestPatchRange = getBestPatchRange(imgu8, targetPoint, diffMethod);
+        console.log("best patch range", bestPatchRange[0], bestPatchRange[1]);
+        //var bestPatchRange = [[641, 650], [672, 682]];
+        fillImage(imgu8, targetPoint, bestPatchRange);
+        fillImage(imgu8R, targetPoint, bestPatchRange);
+        fillImage(imgu8G, targetPoint, bestPatchRange);
+        fillImage(imgu8B, targetPoint, bestPatchRange);
+        updateFillRange(fillRange, targetPoint);
+        var percentage = (1.0 - sumArray(fillRange)/totalFillRange) * 100.0;
+        //setTimeout(inpaint, 1000, imgu8, imgu8R,  imgu8G, imgu8B, imgData, ctx);
+        // launch();
+        document.getElementById("progress").innerHTML = "Inpaint progress: " + percentage.toString() + "%";
+        //document.getElementById("progress").appendChild(document.createTextNode("Inpaint progress: " + percentage.toString() + "%"));
+        //innerHTML = "Inpaint progress: " + percentage.toString() + "%";
+        console.log("fillrange is now", sumArray(fillRange));
+        for (var i = 0; i < imgu8R.length; i ++) {
+            if (fillRange[i] == 0) {
+                imgData.data[4*i ] = imgu8R[i];
+                imgData.data[4*i + 1 ] = imgu8G[i];
+                imgData.data[4*i + 2] = imgu8B[i];
+            }
+            // imgData.data[4*i ] = imgu8R[i];
+            // imgData.data[4*i + 1 ] = imgu8G[i];
+            // imgData.data[4*i + 2] = imgu8B[i];
+        }
+        // for (var i = 0; i < imgu8R.length; i ++) {
+        //     imgData.data[4*i + 3] = 255; //alpha
+        // }
+        ctx.putImageData(imgData, 0, 0);
+        //window.setTimeout(inpaint, 1000, imgu8, imgu8R,  imgu8G, imgu8B, imgData, ctx);
+        setTimeout(inpaint, delay, imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx);
+    }
+    // return self.fillimage
+    // ctx.putImageData(imgData, 0, 0);
+}
+
+function fillImage(image, targetPoint, sourcePatchRange) {
+    var targetPatchRange = getPatchRange(targetPoint);
+    var start = (imgWidth * targetPatchRange[1][0]) + targetPatchRange[0][0];
+    var end =  (imgWidth * targetPatchRange[1][1]) + targetPatchRange[0][1];
+    //var targetPatchWidth = targetPatchRange[0][1] - targetPatchRange[0][0] + 1;
+    // var targetPatchData = getPatchData(fillRange, targetPatchRange);
+    // var fillPointPos = [];
+    // for (var i = 0; i < targetPatchData.length; i ++) {
+    //     if (targetPatchData[i] > 0) {
+    //         fillPointPos.push(i);
+    //     }
+    // }
+    var fillPointPos = [];
+    for (var i = start; i < end; i ++) {
+        if (fillRange[i] > 0) {
+            confidence[i] = confidence[ravelIndex(targetPoint, imgWidth)];
+        }
+    }
+    // update confidence of the target patch
+
+    // var targetConfidence = getPatchData(confidence, targetPatchRange);
+    // for (i of fillPointPos) {
+    //     targetConfidence[i] = confidence[ravelIndex(targetPoint, imgWidth)];
+    // }
+    // update pixels of the target patch
+    var srcStart = (imgWidth * sourcePatchRange[1][0]) + sourcePatchRange[0][0];
+    var srcEnd = (imgWidth * sourcePatchRange[1][1]) + sourcePatchRange[0][1];
+    var offset = srcStart - start;
+    // for (i of fillPointPos) {
+    //     imgu8[i] = imgu8[i + offset];
+    // }
+    for (var i = start; i < end; i ++) {
+        if (fillRange[i] > 0) {
+            image[i] = image[i + offset];
+        }
+    }
+    // var sourcePatch = getPatchData(imgu8, sourcePatchRange); // maybe should be original image.data
+    // var targetPatch = getPatchData(imgu8, targetPatchRange);
+    // for (i of fillPointPos) {
+    //     targetPatch[i] = sourcePatch[i];
+    // }
+    // update fill range 
+    // for (var i = start; i < end; i++) {
+    //     fillRange[i] = 0;
+    // }
+}
+
+function updateFillRange(fillRange, targetPoint) {
+    var targetPatchRange = getPatchRange(targetPoint);
+    var start = (imgWidth * targetPatchRange[1][0]) + targetPatchRange[0][0];
+    var end =  (imgWidth * targetPatchRange[1][1]) + targetPatchRange[0][1];
+    for (var i = start; i < end; i++) {
+        fillRange[i] = 0;
+    }
+}
+
+function sumArray(array) {
+    return array.reduce((a, b) => a + b, 0);
+}
+
+function getEdge(fillRange) {
+    // use laplacian edge detection to find inpaint boarder
+    let src = cv.matFromArray(imgHeight, imgWidth, cv.CV_8UC1, fillRange);
+    // let src = cv.Mat.zeros(imgHeight, imgWidth, cv.CV_8UC1);
+    // for (var i = 0; i < fillRange.length; i ++) {
+    //     if (fillRange[i] == 1) {
+    //         var pos = unravelIndex(i, imgWidth);
+    //         src.ucharPtr(pos[0], pos[1])[0] = 255;
+    //     }
+    // }
+    //cv.imshow('inpaint', src);
+    //let src = cv.matFromImageData(imgData);
+    front = new cv.Mat();
+    //cv.cvtColor(src, src, cv.COLOR_RGB2GRAY, 0);
+    cv.Laplacian(src, front, cv.CV_8U, 1, 1, 0, cv.BORDER_DEFAULT); 
+    //cv.Canny(src, dst, 50, 100, 3, false);
+    cv.imshow('inpaint', front);
+    //console.log("front data", front.data);
+    //console.log("front", sumArray(front.data));
+    // for (var x = 0; x < 829; x++) {
+    //     for (var y = 0; y < 1152; y++) {
+    //         if (dst.data[(imgWidth * y) + x] == 255) {
+    //             console.log("boarder", x, y, (imgWidth * y) + x);
+    //         } 
+    //     }
+    // }
+    // self.front = (cv.Laplacian(self.fill_range, -1) > 0).astype('uint8')
+    src.delete();// dst.delete();
+    //ctx.putImageData(front.data, 0, 0);
+
+    //return dst;
+    //return front;
+}
+
+function getBestPatchRange(image, templatePoint, diffMethod) {
+    var templatePatchRange = getPatchRange(templatePoint);
+    var patchWidth = templatePatchRange[0][1] - templatePatchRange[0][0] + 1;
+    var patchHeight = templatePatchRange[1][1] - templatePatchRange[1][0] + 1;
+    var bestPatchRange;
+    var bestDiff = Infinity;
+    var sourcePatchRange;
+    var src = cv.imread(texture.image);
+    var labImage = new cv.Mat();
+    cv.cvtColor(src, labImage, cv.COLOR_BGR2Lab, 0);
+    src.delete();
+    //Use pixel within a certain range to improve speed
+    var xStart = Math.max(0, templatePoint[0] - 250);
+    var xEnd = Math.min(imgWidth - patchWidth + 1, templatePoint[0] + 250);
+    var yStart = Math.max(0, templatePoint[1] - 250);
+    var yEnd = Math.min(imgHeight - patchHeight + 1, templatePoint[1] + 250);
+
+    // for (var x = 0; x < imgWidth - patchWidth + 1; x ++) {
+    //     for (var y = 0; y < imgHeight - patchHeight + 1; y ++) {
+    for (var x = xStart; x < xEnd; x ++) {
+        for (var y = yStart; y < yEnd; y ++) {
+            var sourcePatchRange = [[x, x + patchWidth], [y, y + patchHeight]];
+            //console.log("sourcePatchRange", sourcePatchRange);
+            if (sumArray(getPatchData(masku8, sourcePatchRange)) != 0 || sumArray(getPatchData(fillRange, sourcePatchRange)) != 0) {
+                continue;
+            }
+            var diff;
+            if (diffMethod == "sqDiff") {
+                diff = getSqDiff(labImage.data, fillRange, templatePatchRange, sourcePatchRange);
+            } else if (diffMethod == "sqDiffEuclidean") {
+                diff = getSqDiffEuclidean(labImage.data, fillRange, templatePatchRange, sourcePatchRange, templatePoint);
+            } else if (diffMethod == "sqDiffGradient") {
+                diff = getSqDiffWithGradient(labImage.data, fillRange, templatePatchRange, sourcePatchRange, templatePoint);
+            } else if (diffMethod == "sqDiffGradientEuclidean") {
+                diff = getSqDiffGradientEuclidean(labImage.data, fillRange, templatePatchRange, sourcePatchRange, templatePoint);
+            }
+            // var diff = getSqDiffEuclidean(labImage.data, fillRange, templatePatchRange, sourcePatchRange, templatePoint);
+            //console.log("diff", diff);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestPatchRange = sourcePatchRange;
+            }
+        }
+    }
+    return bestPatchRange;
+}
+
+function getSqDiff(image, fillRange, templatePatchRange, sourcePatchRange) {
+    var patch = getPatchData(fillRange, templatePatchRange);
+    // for (var i = 0; i < patch.length; i ++) {
+    //     patch[i] = 255- patch[i]; // NOTE: might be 255 since masku8 values are set to 255
+    // }
+    //console.log("sourcePatchRange", sourcePatchRange);
+    var templatePatch = getPatchData(image, templatePatchRange);
+    var sourcePatch = getPatchData(image, sourcePatchRange);
+    var diff = 0;
+    for (var i = 0; i < patch.length; i ++) { // maybe numjs
+        var template = (255 - patch[i]) * templatePatch[i];
+        var source = (255 - patch[i]) * sourcePatch[i]; // 1 or 255
+        diff += (template - source)**2;
+    }
+    return diff;
+}
+
+function getSqDiffEuclidean(image, fillRange,  templatePatchRange, sourcePatchRange) {
+    var sqDiff = getSqDiff(image, fillRange, templatePatchRange, sourcePatchRange);
+    var euclideandDist = Math.sqrt((templatePatchRange[0][0]-sourcePatchRange[0][0])**2 +
+                                    (templatePatchRange[1][0]-sourcePatchRange[1][0])**2);
+    return sqDiff + euclideandDist;
+}
+
+function getSqDiffWithGradient(image, fillRange, templatePatchRange, sourcePatchRange, targetPos) {
+    var sqDiff = getSqDiff(image, fillRange, templatePatchRange, sourcePatchRange);
+    //console.log("sqdiff", sqDiff)
+    var targetIsophote = [isophote[0][targetPos[0]], isophote[1][targetPos[1]]]; // make sure xy is correct
+    var targetIsophoteVal = Math.sqrt(targetIsophote[0]**2 + targetIsophote[1]**2);
+    var graySourcePatch = getPatchData(grayMat.data, sourcePatchRange);
+    var sourcePatchWidth = sourcePatchRange[0][1] - sourcePatchRange[0][0] + 1;
+    var sourcePatchHeight = sourcePatchRange[1][1] - sourcePatchRange[1][0] + 1;
+    var sourcePatchGradient = getGradient(graySourcePatch, sourcePatchWidth, sourcePatchHeight);
+    //console.log("gradients", sourcePatchGradient[0], sourcePatchGradient[1]);
+    var sourcePatchVal = new Float32Array(graySourcePatch.length);
+    for (var i = 0; i < sourcePatchVal.length; i ++) {
+        sourcePatchVal[i] = Math.sqrt(sourcePatchGradient[0][i]**2 + sourcePatchGradient[1][i]**2);
+        //console.log("source grad val", sourcePatchVal[i]);
+    }
+    //console.log("source patch val", sourcePatchVal);
+    var maxPatchPos = getArgMax(sourcePatchVal); // unravelIndex(getArgMax(sourcePatchVal), sourcePatchWidth);
+    //console.log("maxpatchpos", maxPatchPos);
+    //console.log("")
+    var sourceIsophote = [-sourcePatchGradient[1][maxPatchPos],
+                            sourcePatchGradient[0][maxPatchPos]];
+    // var sourceIsophote = [-sourcePatchGradient[1][maxPatchPos[0]][maxPatchPos[1]],
+    //                         sourcePatchGradient[0][maxPatchPos[0]][maxPatchPos[1]]];
+    //console.log("source isophote", sourceIsophote);
+    var sourceIsophoteVal = sourcePatchVal[getArgMax(sourcePatchVal)];
+    // console.log("sourceIsophoteVal ", sourceIsophoteVal );
+    // console.log("arg max ", getArgMax(sourcePatchVal) );
+    var dotProduct = Math.abs(sourceIsophote[0]*targetIsophote[0] + sourceIsophote[1]*targetIsophote[1]);
+    var norm = sourceIsophoteVal * targetIsophoteVal;
+    var cosTheta = 0;
+    if (norm != 0) {
+        cosTheta = dotProduct/norm;
+    }
+    var diffVal = Math.abs(sourceIsophoteVal - targetIsophoteVal);
+    //console.log("gradsqdiff", sqDiff - cosTheta + diffVal)
+    return sqDiff - cosTheta + diffVal;
+}
+
+function getSqDiffGradientEuclidean(image, fillRange, templatePatchRange, sourcePatchRange, targetPos) {
+    var sqDiffGradient = getSqDiffWithGradient(image, fillRange, templatePatchRange, sourcePatchRange, targetPos);
+    var euclideandDist = Math.sqrt((templatePatchRange[0][0]-sourcePatchRange[0][0])**2 +
+                        (templatePatchRange[1][0]-sourcePatchRange[1][0])**2);
+    return sqDiffGradient + euclideandDist;
+}
+
+function getNormal(fillRange) {
+    var src = cv.matFromArray(imgHeight, imgWidth, cv.CV_8UC1, fillRange);
+    var dstx = new cv.Mat();
+    var dsty = new cv.Mat();
+    // Since white-to-black transition has a negative slope, we need to use higher form datatype
+    // in order to keep both edges (https://docs.opencv.org/3.4/da/d85/tutorial_js_gradients.html)
+    cv.Scharr(src, dstx, cv.CV_64F, 1, 0, 1, 0, cv.BORDER_DEFAULT);
+    cv.Scharr(src, dsty, cv.CV_64F, 0, 1, 1, 0, cv.BORDER_DEFAULT);
+    cv.convertScaleAbs(dstx, dstx, 1, 0); // 
+    cv.convertScaleAbs(dsty, dsty, 1, 0);
+    //var normal = [];
+    // initialize to be size imgHeight * imgWidth filled with zeros
+    //var norm = Array(imgHeight).fill().map(() => Array(imgWidth).fill(0));  
+    //var norm = [];
+    var xUnitNormal = new Float64Array(imgWidth * imgHeight);
+    var yUnitNormal = new Float64Array(imgWidth * imgHeight);
+    for (var i = 0; i < dstx.data.length; i ++) {
+        var xNormal = dstx.data[i];
+        var yNormal = dsty.data[i];
+        if (xNormal != 0 || yNormal != 0 ) {
+            var norm = Math.sqrt(xNormal**2 + yNormal**2);
+            if (norm == 0 ) {
+                norm = 1;
+            }
+            xUnitNormal[i] = xNormal/norm;
+            yUnitNormal[i] = yNormal/norm;
+            // if (xUnitNormal[i] != 0) {
+            //     console.log("x normal", xUnitNormal[i]);
+            // }
+            // if (yUnitNormal[i] != 0) {
+            //     console.log("y normal", yUnitNormal[i]);
+            // }
+        }
+    }
+    src.delete();
+    dstx.delete();
+    dsty.delete();
+    //console.log("xunitnormal", xUnitNormal);
+    return [xUnitNormal, yUnitNormal];
+}
+
+function getIsophote(fillRange) {
+    var grayMatCopy = grayMat.clone();
+    for (var i = 0; i < grayMat.data.length; i ++) {
+        if (fillRange[i] == 255) {
+            grayMatCopy.data[i] = null;
+        }
+    }
+
+    // grayMat = {data: [1, 2, 6, 3, 4, 5]}
+    // imgHeight = 2;
+    // imgWidth = 3;
+    // console.log("graymat data", grayMat.data);
+    // compute the gradient of gray image
+    var gradient = new Float32Array(imgWidth * imgHeight); 
+    var gradients = getGradient(grayMat.data, imgWidth, imgHeight);
+    var rowGradient = gradients[0];
+    var colGradient = gradients[1];
+    var maxRowGradient = new Float32Array(imgWidth * imgHeight); //ygradient
+    var maxColGradient = new Float32Array(imgWidth * imgHeight); // xgradient
+    var frontPositions = getFrontPositions();
+    for (var i = 0; i < grayMat.data.length; i ++) {
+        gradient[i] = Math.sqrt(rowGradient[i]**2 + colGradient[i]**2);
+    }
+    for (position of frontPositions) {
+        //console.log("position", position);
+        var patchRange = getPatchRange(position);
+        var rowGradientPatch = getPatchData(rowGradient, patchRange);
+        var colGradientPatch = getPatchData(colGradient, patchRange);
+        var gradientPatch = getPatchData(gradient, patchRange);
+        var patchWidth = patchRange[0][1] - patchRange[0][0] + 1; // plus 1
+        var patchMaxPos = getArgMax(gradientPatch); //unravelIndex(getArgMax(gradientPatch), patchWidth); //unravel to ravel
+        //console.log("patchmaxpos", patchMaxPos);
+        // rotate 90 degrees
+        //maxRowGradient[ravelIndex(position, imgWidth)] = -colGradientPatch[patchMaxPos];  //not sure about index
+        //maxColGradient[ravelIndex(position, imgWidth)] = rowGradientPatch[patchMaxPos]; //rotate by 90 degrees
+        maxColGradient[ravelIndex(position, imgWidth)] = -rowGradientPatch[patchMaxPos];  //not sure about index
+        maxRowGradient[ravelIndex(position, imgWidth)] = colGradientPatch[patchMaxPos]; //rotate by 90 degrees
+        // if (rowGradientPatch[patchMaxPos] != 0) {
+        //     console.log("r gradient", rowGradientPatch[patchMaxPos])
+        // }
+        // if (colGradientPatch[patchMaxPos] != 0) {
+        //     console.log("c gradient", colGradientPatch[patchMaxPos])
+        // }
+        //             patch_max_pos = np.unravel_index(
+//                 patch_gradient_val.argmax(),
+//                 patch_gradient_val.shape
+//             )
+//             # 旋转90度
+//             max_gradient[point[0], point[1], 0] = \
+//                 -patch_y_gradient[patch_max_pos]
+//             max_gradient[point[0], point[1], 1] = \
+//                 patch_x_gradient[patch_max_pos]
+
+//         return max_gradient
+    }
+    // console.log("maxrowgradient", sumArray(maxRowGradient));
+    // console.log("maxcolgradient", sumArray(maxColGradient));
+    return [maxRowGradient, maxColGradient]; 
+
+    // console.log("rowGradient", rowGradient);
+    // console.log("col gradient", colGradient);
+    // for (var i = 0; i < grayMat.data.length; i ++) {
+    //     if (i == 0 || i == grayMat.data.length - 1) {
+    //         if (grayMat.data[i] == null || grayMat.data[i-1] == null) {
+    //             gradient[i] = 0;
+    //         } else {
+    //             gradient[i] = grayMat.data[i] - grayMat.data[i-1];
+    //         }
+    //     } else {
+    //         if (grayMat.data[i+1] == null || grayMat.data[i-1] == null) {
+    //             gradient[i] = 0;
+    //         } else {
+    //             gradient[i] = (grayMat.data[i+1] - grayMat.data[i-1]) / 2;
+    //         }
+    //     }
+    // }
+}
+
+// gray_image = np.copy(self.gray_image)
+//         gray_image[self.fill_range == 1] = None
+//         gradient = np.nan_to_num(np.array(np.gradient(gray_image)))
+//         gradient_val = np.sqrt(gradient[0]**2 + gradient[1]**2)
+//         max_gradient = np.zeros([self.height, self.width, 2])
+//         front_positions = np.argwhere(self.front == 1)
+//         for point in front_positions:
+//             patch = self._get_patch_range(point)
+//             patch_y_gradient = self._patch_data(gradient[0], patch)
+//             patch_x_gradient = self._patch_data(gradient[1], patch)
+//             patch_gradient_val = self._patch_data(gradient_val, patch)
+//             patch_max_pos = np.unravel_index(
+//                 patch_gradient_val.argmax(),
+//                 patch_gradient_val.shape
+//             )
+//             # 旋转90度
+//             max_gradient[point[0], point[1], 0] = \
+//                 -patch_y_gradient[patch_max_pos]
+//             max_gradient[point[0], point[1], 1] = \
+//                 patch_x_gradient[patch_max_pos]
+
+//         return max_gradient
+
+function getGradient(data, width, height) { // data is 1d so we need to know the shape in 2d
+    var rowGradient = new Float32Array(data.length);
+    var colGradient = new Float32Array(data.length);
+    var x0, x1, y0, y1, delX, delY;
+    for (var x = 0; x < width; x ++) {
+        for (var y = 0; y < height; y ++) {
+            if (x == 0) {
+                x0 = data[ravelIndex([0, y], width)];
+                x1 = data[ravelIndex([1, y], width)];
+                delX = 1;
+                // console.log("flat index", ravelIndex([0, y], imgWidth));
+                // console.log("flat index", ravelIndex([1, y], imgWidth));
+            } else if (x == width - 1) {
+                x0 = data[ravelIndex([width - 2, y], width)];
+                x1 = data[ravelIndex([width - 1, y], width)];
+                delX = 1;
+            } else {
+                x0 = data[ravelIndex([x - 1, y], width)];
+                x1 = data[ravelIndex([x + 1, y], width)];
+                delX = 2;
+            }
+            if (y == 0) {
+                y0 = data[ravelIndex([x, 0], width)];
+                y1 = data[ravelIndex([x, 1], width)];
+                delY = 1;
+            } else if (y == height - 1) {
+                y0 = data[ravelIndex([x, height - 2], width)];
+                y1 = data[ravelIndex([x, height - 1], width)];
+                delY = 1;
+            } else {
+                y0 = data[ravelIndex([x, y - 1], width)];
+                y1 = data[ravelIndex([x, y + 1], width)];
+                delY = 2;
+            }
+            //console.log("x0 x1", x0, x1);
+            if (x0 == null || x1 == null) {
+                colGradient[ravelIndex([x, y], width)] = 0;
+            } else {
+                colGradient[ravelIndex([x, y], width)] = (x1 - x0) / delX;
+            }
+            if (y0 == null || y1 == null) {
+                rowGradient[ravelIndex([x, y], width)] = 0;
+            } else {
+                rowGradient[ravelIndex([x, y], width)] = (y1 - y0) / delY;
+            }
+        }
+    }
+    return [rowGradient, colGradient];
+}
+
+// update the data term
+function updateD(fillRange) {
+    var normal = getNormal(fillRange); 
+    isophote = getIsophote(fillRange);
+    //console.log("isophote", sumArray(isophote[0]), sumArray(isophote[1]));
+    DTerm = new Float32Array(imgWidth * imgHeight);
+    for (var i = 0; i < DTerm.length; i ++) {
+        // console.log("normals and isophote", normal[0][i], normal[1][i], isophote[0][i], isophote[1][i]);
+        DTerm[i] = Math.abs(normal[0][i]*isophote[0][i]**2 + normal[1][i]*isophote[1][i]**2 + 0.001);
+        // if (DTerm[i] != 0) {
+        //     //console.log("normals and isophote", normal[0][i], normal[1][i], isophote[0][i], isophote[1][i]);
+        // }
+    }
+    //console.log("D sum", sumArray(DTerm));
+}
+
+// return the range of patch around a pixel point, in 1D flat index 
+function getPatchRange(point, patchSize = 9) {
+    var halfSize = ~~((patchSize-1) / 2); // floor division 
+    // var startX = Math.max(0, point[0] - halfSize);
+    // var startY = Math.min(point[0] + halfSize, imgHeight);
+    // var endX = Math.max(0, point[1] - halfSize);
+    // var endY = Math.min(point[1]+halfSize+1, imgWidth);
+    // return [(imgWidth * startY) + startX, (imgWidth * endY) + endX];
+    var patchRange = [[Math.max(0, point[0] - halfSize), Math.min(point[0] + halfSize, imgWidth)], 
+                        [Math.max(0, point[1] - halfSize), Math.min(point[1]+halfSize+1, imgHeight)]];
+    return patchRange;
+}
+
+function updatePriority(fillRange) {
+    updateFrontConfidence();
+    updateD(fillRange);
+    for (var i = 0; i < priority.length; i ++) {
+        priority[i] = confidence[i] * DTerm[i] * (front.data[i]/255);
+        // if (priority[i] > 0) {
+        //     //console.log("priority", priority[i]);
+        // }
+    }
+}
+
+function getTargetPoint() {
+    return unravelIndex(getArgMax(priority), imgWidth);
+}
+
+function updateFrontConfidence() {
+    var newConfidence = confidence.slice();
+    var frontPositions = getFrontPositions();
+    for (position of frontPositions) {
+        var patchRange = getPatchRange(position);
+        // get the sum of confidence within range
+        var patchConfidenceSum = getPatchData(confidence, patchRange).reduce((a, b) => a + b, 0); 
+        var area = (patchRange[0][1] - patchRange[0][0]) * (patchRange[1][1] - patchRange[1][0]);
+        newConfidence[ravelIndex(position, imgWidth)] = patchConfidenceSum / area / 100; // unsure
+        //console.log("confidence", patchConfidenceSum / area / 100);
+    }
+    confidence = newConfidence;
+}
+
+// get the index of the largest element in array
+function getArgMax(array) {
+    if (array.length === 0) {
+        return -1;
+    }
+    var max = array[0];
+    var maxIndex = 0;
+
+    for (var i = 1; i < array.length; i++) {
+        if (array[i] > max) {
+            maxIndex = i;
+            max = array[i];
+        }
+    }
+    return maxIndex;
+}
+
+// get a portion of the given 1d data array as specified by the range
+function getPatchData(data, patchRange) {
+    //var patchData = []
+    // for (var i = patchRange[0][0]; i < patchRange[0][1]; i ++) {
+    //     patchData.push(imageData[i].slice(patchRange[1][0], patchRange[1][1]));
+    // }
+    // return patchData;
+    // var start = (imgWidth * patchRange[0][1]) + patchRange[0][0];
+    // var end =  (imgWidth * patchRange[1][1]) + patchRange[1][0];
+    // correct
+    // [[x0, x1], [y0, y1]]
+    var start = (imgWidth * patchRange[1][0]) + patchRange[0][0];
+    var end =  (imgWidth * patchRange[1][1]) + patchRange[0][1];
+    //return data.slice(patchRange[0], patchRange[1]);
+    return data.slice(start, end);
+    
+}
+
+function getFrontPositions() {
+    var frontPositions = [];
+    // for (var x = 0; x < imgHeight; x ++) {
+    //     for (var y = 0; y < imgWidth; y++) {
+    //         var i = x * imgWidth + y;
+    //         if (front.data[i] == 255) {
+    //             frontPositions.push([y, x]);
+    //         }
+    //     }
+    // }
+    for (var y = 0; y < imgHeight; y ++) {
+        for (var x = 0; x < imgWidth; x++) {
+            var i = y * imgWidth + x;
+            if (front.data[i] == 255) {
+                frontPositions.push([x, y]);
+            }
+        }
+    }
+    return frontPositions;
+}
+
+//     //x_normal = cv.Scharr(self.fill_range, cv.CV_64F, 1, 0)
+//         // y_normal = cv.Scharr(self.fill_range, cv.CV_64F, 0, 1)
+//         // normal = np.dstack([x_normal, y_normal])
+//         // norm = np.sqrt(x_normal**2+y_normal**2).reshape(self.height,
+//         //                                                 self.width, 1).repeat(2, axis=2)
+//         // norm[norm == 0] = 1
+//         // unit_normal = normal/norm
+//         // return unit_normal
+// }
+
+// convert 2d matrix index to 1d given width of the 2d array
+function ravelIndex(twoDIndex, width) {
+    return width * twoDIndex[1] + twoDIndex[0];
+}
+
+// convert 1d flat array index to 2d matrix index given width of the matrix 
+function unravelIndex(index, width) {
+    return [index % width, Math.floor(index/width)]; // [x-width, y-height]
 }
