@@ -11,6 +11,7 @@ var maskPoints; // points indicating region to be inpainted
 var mask;
 var maskLinePoints;
 var maskLine;
+var sceneCreated = false;
 var front; // the edge of inpaint region
 var grayMat;
 var confidence;
@@ -273,7 +274,7 @@ function addControlPoints() {
         } else {
             // add new foreground object points
             var intersects = raycaster.intersectObjects(planes);
-            if (maskPoints == null) {
+            if (maskPoints == null && !sceneCreated) {
                 if (intersects.length > 0) {
                     maskPoints = new THREE.Geometry();
                     settingForegroundMask = true;
@@ -302,7 +303,7 @@ function addControlPoints() {
                     scene.add(maskLine);
                 }
             } else {
-                if (intersects.length > 0) {
+                if (intersects.length > 0 && !sceneCreated) {
                     var mVertices = maskPoints.vertices;
                     mVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // upper left
                     mVertices.push(new THREE.Vector3(intersects[0].point.x, intersects[0].point.y, 0)); // upper right
@@ -545,7 +546,18 @@ function calculateLineIntersection(line1,  line2) {
     return result;
 };
 
+function isBlank(canvasID) {
+    var canvas = document.getElementById(canvasID);
+    return !canvas.getContext('2d')
+      .getImageData(0, 0, canvas.width, canvas.height).data
+      .some(channel => channel !== 0);
+}
+
 function constructScene() {
+    // if (maskPoints != null && isBlank("inpaint")) {
+    //     alert("Please inpaint the image first");
+    //     return;
+    // }
     // 0-center(vanish point) 1-lowerleft 2-upperleft 3-upperright 4-lowerright
     // 0: Vector3 {x: -5, y: 3.75, z: 0}
     // 1: Vector3 {x: 5, y: 3.75, z: 0}
@@ -576,7 +588,9 @@ function constructScene() {
     warpImageOntoCanvas(coordinates.Left.source, coordinates.Left.target, "left");
     warpImageOntoCanvas(coordinates.Right.source, coordinates.Right.target, "right");
     warpImageOntoCanvas(coordinates.Top.source, coordinates.Top.target, "top");
-    createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight);
+    createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight); 
+    // enable orbit controls
+    controls.enabled = true;
     addCameraPositions(dTop, dBottom, dLeft, dRight);
     // remove the control points
     var planeObject = scene.getObjectByName('planeMeshObject');
@@ -587,11 +601,6 @@ function constructScene() {
     scene.remove( pointObject );
     scene.remove( lineObject );
     scene.remove( edgePointObject );
-    // var pointLight = new THREE.PointLight(0xffffff);
-    // pointLight.position.set(1, 1, 100);
-    // scene.add(pointLight);
-    // enable orbit controls
-    controls.enabled = true;
 }
 
 function convertToPixelCoord(loc, planeWidth, planeHeight, imageWidth, imageHeight) {
@@ -717,6 +726,9 @@ function getTransformCoordinates(dTop, dBottom, dLeft, dRight) {
 
 function warpImageOntoCanvas(source, target, canvasId) {
     var origin = cv.imread(texture.image);
+    // if (maskPoints != null) { // there is foreground mask so use inpainted image
+    //     origin = cv.imread("inpaint");
+    // }
     console.log("origin", origin);
     var destination = new cv.Mat();
     var dsize = new cv.Size(target.BR.x, target.BR.y);
@@ -731,8 +743,6 @@ function warpImageOntoCanvas(source, target, canvasId) {
 }
 
 function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
-    var halfW = Math.abs(mesh.geometry.vertices[0].x);
-    var halfH = Math.abs(mesh.geometry.vertices[0].y);
     // bottom
     var canvasBottom=document.getElementById("bottom");
     var bottomTexture = new THREE.CanvasTexture(canvasBottom);
@@ -792,6 +802,55 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
     topPlane.translateZ(dTop/2);
     topPlane.rotation.x = Math.PI / 2;
     scene.add(topPlane);
+    // add foreground mask planes if any
+    if (maskPoints != null) { 
+        // calculate the depth of the object
+        var f = camera.getFocalLength();
+        var l = dots.geometry.vertices[0].y - mesh.geometry.vertices[2].y;
+        var a = dots.geometry.vertices[2].y - dots.geometry.vertices[0].y;
+        var b = dots.geometry.vertices[0].y - dots.geometry.vertices[1].y;
+        for (var i = 0; i < maskPoints.vertices.length; i += 4) {
+            var inpaintLoc={
+                TL:{x:maskPoints.vertices[i].x, y:maskPoints.vertices[i].y},     
+                TR:{x:maskPoints.vertices[i + 1].x, y:maskPoints.vertices[i + 1].y},     
+                BR:{x:maskPoints.vertices[i + 3].x, y:maskPoints.vertices[i + 3].y},    
+                BL:{x:maskPoints.vertices[i + 2].x, y:maskPoints.vertices[i + 2].y}     
+            }
+            // the portion between bottom line of the back plane and the top of the mask- can be negative
+            var p = dots.geometry.vertices[1].y - maskPoints.vertices[i].y;
+            // height of the foreground mask 
+            var x = maskPoints.vertices[i].y - maskPoints.vertices[i + 2].y;
+            // the distance from bottom of the mask to the bottom of the mesh plane
+            var q = maskPoints.vertices[i + 2].y - mesh.geometry.vertices[2].y;
+            // Since q/l = d_mask/(d_mask+f)
+            var d_mask = f*q/(l-q);
+            console.log("d_mask", d_mask);
+            // Since x/h_mask = f/(d+f)
+            var h_mask = x * (d_mask + f)/f;
+            var ratio = (maskPoints.vertices[i + 1].x - maskPoints.vertices[i].x)/ (maskPoints.vertices[i].y - maskPoints.vertices[i + 3].y);
+            var w_mask = h_mask * ratio;
+            console.log("h_mask", h_mask);
+            console.log("w_mask", w_mask);
+            // var canvasBottom=document.getElementById("bottom");
+            // var bottomTexture = new THREE.CanvasTexture(canvasBottom);
+            var maskPlaneGeometry = new THREE.PlaneGeometry(w_mask, h_mask);
+            var maskMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff
+            });
+            maskPlane= new THREE.Mesh(maskPlaneGeometry, maskMaterial);
+            maskPlane.translateY(-halfH + q);
+            xtrans_mask = maskPoints.vertices[i].x * (d_mask+f)/f;
+            maskPlane.translateX(xtrans_mask);
+            maskPlane.translateZ((dBottom - d_mask)/2);
+            // bottomPlane.rotation.x = -Math.PI / 2;
+            scene.add(maskPlane);
+        }
+    }
+    var masks = scene.getObjectByName("foregroundMask");
+    var maskLines = scene.getObjectByName("maskLine");
+    scene.remove(masks);
+    scene.remove(maskLines);
+    sceneCreated = true;
 }
 
 //-----------------------------------------------------------------------------
@@ -1207,6 +1266,7 @@ function inpaint(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) { //imgu8) { //
         //document.getElementById("progress").appendChild(document.createTextNode("Inpaint progress: " + percentage.toString() + "%"));
         //innerHTML = "Inpaint progress: " + percentage.toString() + "%";
         console.log("fillrange is now", sumArray(fillRange));
+        console.log("Inpaint progress", percentage.toString() + "%")
         for (var i = 0; i < imgu8R.length; i ++) {
             if (fillRange[i] == 0) {
                 imgData.data[4*i ] = imgu8R[i];
