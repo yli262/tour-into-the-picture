@@ -809,13 +809,12 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
         var l = dots.geometry.vertices[0].y - mesh.geometry.vertices[2].y;
         var a = dots.geometry.vertices[2].y - dots.geometry.vertices[0].y;
         var b = dots.geometry.vertices[0].y - dots.geometry.vertices[1].y;
+        var canvas=document.getElementById("original");
+        canvas.width = imgWidth;
+        canvas.height = imgHeight;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(texture.image, 0, 0);
         for (var i = 0; i < maskPoints.vertices.length; i += 4) {
-            var inpaintLoc={
-                TL:{x:maskPoints.vertices[i].x, y:maskPoints.vertices[i].y},     
-                TR:{x:maskPoints.vertices[i + 1].x, y:maskPoints.vertices[i + 1].y},     
-                BR:{x:maskPoints.vertices[i + 3].x, y:maskPoints.vertices[i + 3].y},    
-                BL:{x:maskPoints.vertices[i + 2].x, y:maskPoints.vertices[i + 2].y}     
-            }
             // the portion between bottom line of the back plane and the top of the mask- can be negative
             var p = dots.geometry.vertices[1].y - maskPoints.vertices[i].y;
             // height of the foreground mask 
@@ -833,10 +832,33 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
             console.log("w_mask", w_mask);
             // var canvasBottom=document.getElementById("bottom");
             // var bottomTexture = new THREE.CanvasTexture(canvasBottom);
-            var maskPlaneGeometry = new THREE.PlaneGeometry(w_mask, h_mask);
-            var maskMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffffff
+            var inpaintLoc={
+                TL:{x:maskPoints.vertices[i].x, y:maskPoints.vertices[i].y},     
+                TR:{x:maskPoints.vertices[i + 1].x, y:maskPoints.vertices[i + 1].y},     
+                BR:{x:maskPoints.vertices[i + 3].x, y:maskPoints.vertices[i + 3].y},    
+                BL:{x:maskPoints.vertices[i + 2].x, y:maskPoints.vertices[i + 2].y}     
+            }
+            var inpaintRegion = convertToPixelCoord(inpaintLoc, imgPlaneWidth, imgPlaneHeight, imgWidth, imgHeight);
+            var minX = Math.round(inpaintRegion.TL.x);
+            var minY = Math.round(inpaintRegion.TR.y);
+            var maxX = Math.round(inpaintRegion.BR.x);
+            var maxY = Math.round(inpaintRegion.BR.y);
+            var maskData = ctx.getImageData(minX, minY, maxX, maxY);
+            var maskImage = new Image();
+            var canvas = document.getElementById("mask");
+            var ctx2 = canvas.getContext('2d');
+            canvas.width = maxX - minX;
+            canvas.height = maxY - minY;
+            ctx2.putImageData(maskData, 0, 0);
+            maskImage.src = canvas.toDataURL();
+            var loader = new THREE.TextureLoader();
+            var maskMaterial  = new THREE.MeshLambertMaterial({
+                map: loader.load(canvas.toDataURL())
             });
+            var maskPlaneGeometry = new THREE.PlaneGeometry(w_mask, h_mask);
+            // var maskMaterial = new THREE.MeshBasicMaterial({
+            //     color: 0xffffff
+            // });
             maskPlane= new THREE.Mesh(maskPlaneGeometry, maskMaterial);
             maskPlane.translateY(-halfH + q);
             xtrans_mask = maskPoints.vertices[i].x * (d_mask+f)/f;
@@ -852,6 +874,15 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
     scene.remove(maskLines);
     sceneCreated = true;
 }
+
+// function getImageURL(imgData, width, height) {
+//     var canvas = document.createElement('canvas');
+//     var ctx = canvas.getContext('2d');
+//     canvas.width = width;
+//     canvas.height = height;
+//     ctx.putImageData(imgData, 0, 0);
+//     return canvas.toDataURL(); //image URL
+// }
 
 //-----------------------------------------------------------------------------
 function start(source, target, dBottom){
