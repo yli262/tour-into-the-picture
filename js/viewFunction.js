@@ -850,11 +850,13 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
             canvas.width = maxX - minX;
             canvas.height = maxY - minY;
             ctx2.putImageData(maskData, 0, 0);
+            grabCutMask("mask", minX, minY, maxX, maxY, 2);
             maskImage.src = canvas.toDataURL();
             var loader = new THREE.TextureLoader();
             var maskMaterial  = new THREE.MeshLambertMaterial({
                 map: loader.load(canvas.toDataURL())
             });
+            maskMaterial.transparent = true;
             var maskPlaneGeometry = new THREE.PlaneGeometry(w_mask, h_mask);
             // var maskMaterial = new THREE.MeshBasicMaterial({
             //     color: 0xffffff
@@ -875,14 +877,30 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
     sceneCreated = true;
 }
 
-// function getImageURL(imgData, width, height) {
-//     var canvas = document.createElement('canvas');
-//     var ctx = canvas.getContext('2d');
-//     canvas.width = width;
-//     canvas.height = height;
-//     ctx.putImageData(imgData, 0, 0);
-//     return canvas.toDataURL(); //image URL
-// }
+function grabCutMask(maskCanvas, minX, minY, maxX, maxY, boarder) {
+    widthMask = maxX - minX;
+    heightMask = maxY - minY;
+    let src = cv.imread(maskCanvas);
+    cv.cvtColor(src, src, cv.COLOR_RGBA2RGB, 0);
+    let maskGrabcut = new cv.Mat();
+    let bgdModel = new cv.Mat();
+    let fgdModel = new cv.Mat();
+    let rect = new cv.Rect(boarder, boarder, widthMask - boarder, heightMask - boarder);
+    cv.grabCut(src, maskGrabcut, rect, bgdModel, fgdModel, 1, cv.GC_INIT_WITH_RECT);
+    // add alpha channel
+    cv.cvtColor(src, src, cv.COLOR_RGB2RGBA, 0);
+    // draw foreground
+    for (let i = 0; i < src.rows; i++) {
+        for (let j = 0; j < src.cols; j++) {
+            if (maskGrabcut.ucharPtr(i, j)[0] == 0 || maskGrabcut.ucharPtr(i, j)[0] == 2) {
+                // set background to transparent
+                src.ucharPtr(i, j)[3] = 0;
+            }
+        }
+    }
+    cv.imshow(maskCanvas, src);
+    src.delete(); maskGrabcut.delete(); bgdModel.delete(); fgdModel.delete(); 
+}
 
 //-----------------------------------------------------------------------------
 function start(source, target, dBottom){
