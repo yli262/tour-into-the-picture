@@ -28,6 +28,7 @@ var rightPlane;
 var myImage;
 var texture;
 var fillRange; 
+var totalFillRange;
 // var fillRangeOriginal;
 var masku8;
 var imgu8Original;
@@ -555,8 +556,8 @@ function isBlank(canvasID) {
 
 function constructScene() {
     // if (maskPoints != null && isBlank("inpaint")) {
-    //     alert("Please inpaint the image first");
-    //     return;
+    //     // alert("Please inpaint the image first");
+    //     // return;
     // }
     // 0-center(vanish point) 1-lowerleft 2-upperleft 3-upperright 4-lowerright
     // 0: Vector3 {x: -5, y: 3.75, z: 0}
@@ -726,9 +727,9 @@ function getTransformCoordinates(dTop, dBottom, dLeft, dRight) {
 
 function warpImageOntoCanvas(source, target, canvasId) {
     var origin = cv.imread(texture.image);
-    // if (maskPoints != null) { // there is foreground mask so use inpainted image
-    //     origin = cv.imread("inpaint");
-    // }
+    if (maskPoints != null && !isBlank("inpaint")) { // there is foreground mask so use inpainted image
+        origin = cv.imread("inpaint");
+    }
     console.log("origin", origin);
     var destination = new cv.Mat();
     var dsize = new cv.Size(target.BR.x, target.BR.y);
@@ -863,8 +864,8 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
             // });
             maskPlane= new THREE.Mesh(maskPlaneGeometry, maskMaterial);
             maskPlane.translateY(-halfH + q);
-            xtrans_mask = maskPoints.vertices[i].x * (d_mask+f)/f;
-            maskPlane.translateX(xtrans_mask);
+            xtrans_mask = maskPoints.vertices[i].x/2 * (d_mask+f)/f; //maskPoints.vertices[i].x * (d_mask+f)/f;
+            maskPlane.translateX(xtrans_mask/2 );
             maskPlane.translateZ((dBottom - d_mask)/2);
             // bottomPlane.rotation.x = -Math.PI / 2;
             scene.add(maskPlane);
@@ -1245,7 +1246,8 @@ function exemplarInpaint() {
     for (var i = 0; i < imgu8.length; i ++) {
         imgData.data[4*i + 3] = 255; //alpha
     }
-        inpaintAndShowProgress(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx);
+    totalFillRange = sumArray(fillRange);
+    inpaintAndShowProgress(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx);
         //window.setTimeout(inpaint, 1000, imgu8, imgu8R,  imgu8G, imgu8B, imgData, ctx);
         //console.log("after", sumArray(imgu8));
     //     for (var i = 0; i < imgu8.length; i ++) {
@@ -1276,7 +1278,6 @@ function exemplarInpaint() {
 //  }
 function inpaintAndShowProgress(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) {
     var delay = 200; // 200 miliseconds
-
     setTimeout(inpaint, delay, imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx)
 }
 
@@ -1290,8 +1291,8 @@ function inpaint(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) { //imgu8) { //
             break;
         }
     }
-    var totalFillRange = sumArray(fillRange);
-    var percentage = (1.0 - sumArray(fillRange)/totalFillRange) * 100.0;
+    // var totalFillRange = sumArray(fillRange);
+    // var percentage = ((1.0 - sumArray(fillRange)/totalFillRange) * 100.0).toFixed(2);
     // document.getElementById("progress").innerHTML = "Inpaint progress: " + percentage.toString() + "%";
     if (sumArray(fillRange) != 0) {
         //console.log("fillrange is", sumArray(fillRange));
@@ -1308,7 +1309,7 @@ function inpaint(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) { //imgu8) { //
         fillImage(imgu8G, targetPoint, bestPatchRange);
         fillImage(imgu8B, targetPoint, bestPatchRange);
         updateFillRange(fillRange, targetPoint);
-        var percentage = (1.0 - sumArray(fillRange)/totalFillRange) * 100.0;
+        var percentage = ((1.0 - sumArray(fillRange)/totalFillRange) * 100.0).toFixed(2);
         //setTimeout(inpaint, 1000, imgu8, imgu8R,  imgu8G, imgu8B, imgData, ctx);
         // launch();
         document.getElementById("progress").innerHTML = "Inpaint progress: " + percentage.toString() + "%";
