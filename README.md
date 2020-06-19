@@ -61,8 +61,8 @@ Below are some images produced from the program. As you can see, after the recon
 Here are some "tours" into the images:
 <p align="center">
   <img width="700" src="/sample-result/room-fixed-2.gif">
-  <img width="700" src="/sample-result/demo3.gif">
   <img width="700" src="/sample-result/tiled-room.gif">
   <img width="700" src="/sample-result/beach.gif">
   <img width="700" src="/sample-result/train2.gif">
+  <img width="700" src="/sample-result/demo3.gif">
 </p>
