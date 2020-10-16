@@ -104,6 +104,18 @@ p {
 .header {
     padding: 20px;
     text-align: center;
+    justify-content: center;
     font-family: "Lucida Console", Monaco, monospace;
     color: #4E342E;
+}
+
+.instructions {
+    text-align: left;
+}
+
+.text-wrapper {
+    display: block;
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
 }

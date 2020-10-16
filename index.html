@@ -17,13 +17,18 @@
     <!-- <input id="userImage" type="file" /> -->
     <div class="header">
         <h1>Tour Into the Picture</h1>
-        <p>Turn your 2D image into a 3D scene!</p>
-        <p>Upload the image you want to convert</p>
-        <p>Click and drag the blue control points so the range of the</p>
-        <p>rear plane and the vanishing lines match your image </p>
-        <p>Click "Construct Scene" to produce the 3D scene</p>
-        <p>Use the mouse to adjust camera position and zooming</p>
-        <p>Or Click "Tour Scene" to start the animation</p>
+        <div class="text-wrapper">
+        <div class="instructions">
+        <p>1. Turn your 2D image into a 3D scene!</p>
+        <p>2. Upload the image you want to convert</p>
+        <p>3. Click and drag the blue control points so the range of the rear plane and the vanishing lines match your image </p>
+        <p>4. (Optional) Starting from the top-left corner, click and drag boxes around the foreground objects</p>
+        <p>5. (Optional) Click "Inpaint Image" to inpaint the image (remove the foreground objects from the background) and wait for the inpaint process to complete (percentage progress visible in the console) </br>Note: for large images, this step may take a long time</p></p>
+        <p>6. Click "Construct Scene" to produce the 3D scene</p>
+        <p>7. Use the mouse to adjust camera position and zooming</p>
+        <p>8. Or Click "Tour Scene" to start the animation</p>
+        </div>
+    </div>
     </div>
     <input type="file" id="userImage" style="display: none;" />
     <div class="modal"></div>
