@@ -79,6 +79,21 @@ To remove extra background surrounding the objects from the foreground masks, I 
 
 Gallery
 -------------
+
+### Sample inpaint results ###
+<p float="left">
+<img src="sample-result/inpaint-beach.png" width="430">
+<img src="sample-result/room-square-euclidean-diff.png" width="470">
+</p>
+
+<p float="left">
+<img src="sample-result/inpaint-room.png" width="300">
+<img src="sample-result/inpaint-building.png" width="600">
+</p>
+
+
+### Sample scene construction results ###
+
 Below are some images produced from the program. As you can see, after the reconstruction, we can generate new perspectives of the scene from only one image.
 
 <p float="left">
