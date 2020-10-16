@@ -807,7 +807,8 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
     if (maskPoints != null) { 
         // calculate the depth of the object
         var f = camera.getFocalLength();
-        var l = dots.geometry.vertices[0].y - mesh.geometry.vertices[2].y;
+        var l = halfH;
+        //var l = dots.geometry.vertices[0].y - mesh.geometry.vertices[2].y;
         var a = dots.geometry.vertices[2].y - dots.geometry.vertices[0].y;
         var b = dots.geometry.vertices[0].y - dots.geometry.vertices[1].y;
         var canvas=document.getElementById("original");
@@ -863,9 +864,11 @@ function createTexturedBoxGeometry(dTop, dBottom, dLeft, dRight) {
             //     color: 0xffffff
             // });
             maskPlane= new THREE.Mesh(maskPlaneGeometry, maskMaterial);
-            maskPlane.translateY(-halfH + q);
-            xtrans_mask = maskPoints.vertices[i].x/2 * (d_mask+f)/f; //maskPoints.vertices[i].x * (d_mask+f)/f;
-            maskPlane.translateX(xtrans_mask/2 );
+            xtrans_mask = maskPoints.vertices[i].x * (d_mask+f)/f; //maskPoints.vertices[i].x * (d_mask+f)/f;
+            maskPlane.translateX(xtrans_mask + w_mask/2 );
+            maskPlane.translateY(-(halfH - h_mask/2)); //-halfH + q
+            // xtrans_mask = maskPoints.vertices[i].x * (d_mask+f)/f; //maskPoints.vertices[i].x * (d_mask+f)/f;
+            // maskPlane.translateX(xtrans_mask/2 );
             maskPlane.translateZ((dBottom - d_mask)/2);
             // bottomPlane.rotation.x = -Math.PI / 2;
             scene.add(maskPlane);
