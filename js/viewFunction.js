@@ -1033,6 +1033,7 @@ function inpaint(imgu8, imgu8R, imgu8G, imgu8B, imgData, ctx) { //imgu8) { //
 function fillImage(image, targetPoint, sourcePatchRange) {
     var targetPatchRange = getPatchRange(targetPoint);
     var start = (imgWidth * targetPatchRange[1][0]) + targetPatchRange[0][0];
+    var end =  (imgWidth * targetPatchRange[1][1]) + targetPatchRange[0][1];
     for (var i = start; i < end; i ++) {
         if (fillRange[i] > 0) {
             confidence[i] = confidence[ravelIndex(targetPoint, imgWidth)];
@@ -1115,8 +1116,6 @@ function getBestPatchRange(image, templatePoint, diffMethod) {
             } else if (diffMethod == "sqDiffGradientEuclidean") {
                 diff = getSqDiffGradientEuclidean(labImage.data, fillRange, templatePatchRange, sourcePatchRange, templatePoint);
             }
-            // var diff = getSqDiffEuclidean(labImage.data, fillRange, templatePatchRange, sourcePatchRange, templatePoint);
-            //console.log("diff", diff);
             if (diff < bestDiff) {
                 bestDiff = diff;
                 bestPatchRange = sourcePatchRange;
