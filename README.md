@@ -28,8 +28,18 @@ To use the program, first upload an image of your choice. Input images that work
 </p>
 
 As for the second part of input, indicate the vanishing point and the back plane of the box by dragging around the blue control points on the image plane. The program will update the vanishing lines connecting the vanishing points to the corners of the back plane. Try to make them match the perspective lines in the original input image as closely as possible. 
+<p align="center">
+<img src="instruction/step1.png" width="460">
+</p>
 
-Once the above step is finished, we can construct the 3D box scene based on the specified coordinates. The process includes calculating 3D coordinates of the box from the 2D specified points, and rectifying each of the five image sections using perspective transform. Finally, we construct the geometry and apply the textuers to its five faces. The user can move around inside of the box in order to look at the scene from different perspectives. Alternatively, once the scene has been constructed, the user can click Tour Scene, and an animated scene walkthrough will be displayed. Enjoy!
+If there are any foreground objects in the picture such as a dog or a man, you can create planes for them in the constructed scene. You can also inpaint the image by removing those foreground objects from the background. To do so, create foreground masks by clicking and dragging a box around the objects. You can create multiple foreground boxes in one image. 
+<p align="center">
+<img src="instruction/step2.png" width="460">
+</p>
+
+After you select the foreground objects, you may click the "Inpaint Image" button to generate an image with those objects removed from the scene. The Exemplar based inpainting algorithm will select the best matching region from the background parts and patch it to cover the foreground mask boxes. Since this process is calculation heavy, it may take a long time to complete. It's recommended to start with smaller images or skip this step first.
+
+Once the above steps are finished, we can construct the 3D box scene based on the specified coordinates. The process includes calculating 3D coordinates of the box from the 2D specified points, and rectifying each of the five image sections using perspective transform. Finally, we construct the geometry and apply the textuers to its five faces. If foreground masks are provided, an individual plane will be created for each object. Pixels detected as background will be removed from the rectangle mapping and become transparent. The user can move around inside of the box in order to look at the scene from different perspectives. Alternatively, once the scene has been constructed, the user can click Tour Scene, and an animated scene walkthrough will be displayed. Enjoy!
 
 Gallery
 -------------
